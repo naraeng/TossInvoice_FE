@@ -12,22 +12,25 @@ export default function Header() {
           <span className="text-lg font-bold tracking-tight text-slate-900">Toss Invoice</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm font-semibold text-slate-600 md:flex">
-          <a className="transition hover:text-blue-600" href="#overview">
+          <a className="transition hover:text-blue-600" href="/#service">
             서비스 소개
           </a>
-          <a className="transition hover:text-blue-600" href="#matching">
-            기업 매칭
+          <a className="transition hover:text-blue-600" href="/#reason">
+            왜 필요한가요?
           </a>
-          <a className="transition hover:text-blue-600" href="#order-request">
-            발주 신청
+          <a className="transition hover:text-blue-600" href="/#compare">
+            기존 방식과 비교
+          </a>
+          <a className="transition hover:text-blue-600" href="/#process">
+            이용 방법
           </a>
         </nav>
         <div className="flex items-center gap-2">
           <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700">
-            로그인
+            회원가입
           </button>
           <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
-            주문하기
+            로그인
           </button>
         </div>
       </div>
