@@ -2,6 +2,7 @@ import DashboardHeader from '@/features/dashboard/DashboardHeader';
 import MonthlyGraph from '@/features/dashboard/MonthlyGraph';
 import NoticeList from '@/features/dashboard/NoticeList';
 
+
 export default function Home() {
   const recentOrders = [
     { id: 'PO-240508-001', vendor: '장규식자재', amount: '420,000원', status: '승인 대기' },
