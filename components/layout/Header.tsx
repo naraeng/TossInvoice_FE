@@ -1,4 +1,5 @@
 import { Search, Bell } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Header() {
   return (
@@ -11,18 +12,18 @@ export default function Header() {
           <span className="text-lg font-bold tracking-tight text-slate-900">Toss Invoice</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm font-semibold text-slate-500 md:flex">
-          <a className="transition hover:text-slate-900" href="/#service">
+          <Link className="transition hover:text-slate-900" href="/#service">
             서비스 소개
-          </a>
-          <a className="transition hover:text-slate-900" href="/#reason">
+          </Link>
+          <Link className="transition hover:text-slate-900" href="/#reason">
             왜 필요한가요?
-          </a>
-          <a className="transition hover:text-slate-900" href="/#compare">
+          </Link>
+          <Link className="transition hover:text-slate-900" href="/#compare">
             기존 방식과 비교
-          </a>
-          <a className="transition hover:text-slate-900" href="/#process">
+          </Link>
+          <Link className="transition hover:text-slate-900" href="/#process">
             이용 방법
-          </a>
+          </Link>
         </nav>
         <div className="flex items-center gap-4">
           <button className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700">

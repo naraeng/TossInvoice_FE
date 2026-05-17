@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function DashboardHeader() {
   const todaySummary = [
     {
@@ -34,9 +36,26 @@ export default function DashboardHeader() {
             오늘 진행할 거래 4건이 기다리고 있어요
           </h1>
         </div>
-        <button className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
-          발주 신청 시작
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/documents/quotes/new"
+            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            견적서 작성
+          </Link>
+          <Link
+            href="/documents/quotes/quote-client-demo"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+          >
+            받은 견적 확인
+          </Link>
+          <Link
+            href="/documents/quotes/quote-po-confirmed"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+          >
+            인보이스 발행
+          </Link>
+        </div>
       </header>
 
       <div className="grid gap-3 md:grid-cols-4">
