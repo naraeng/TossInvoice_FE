@@ -20,10 +20,7 @@ import { enrichIssuedQuote } from '@/lib/documents/enrich-issued-quote';
 import { getScreenConfig } from '@/lib/documents/get-screen-config';
 import { saveQuote } from '@/lib/documents/quote-store';
 import { calcTotals } from '@/lib/documents/calc-totals';
-import {
-  clampDownPaymentPercent,
-  formatPaymentTerms,
-} from '@/lib/documents/payment-terms';
+import { clampDownPaymentPercent, formatPaymentTerms } from '@/lib/documents/payment-terms';
 import {
   minValidityUntilDate,
   normalizePaymentDueDays,
@@ -181,8 +178,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   const handleClientPoSignature = useCallback(
     (signed: boolean, imageDataUrl?: string) => {
       setHasClientPoSignature(signed);
-      const signerName =
-        quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+      const signerName = quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -217,9 +213,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       if (!signed || !imageDataUrl) {
         persist({
           ...quote,
-          signatures: quote.signatures.filter(
-            (s) => !(s.party === 'SUPPLIER' && s.scope === 'PO')
-          ),
+          signatures: quote.signatures.filter((s) => !(s.party === 'SUPPLIER' && s.scope === 'PO')),
         });
         return;
       }
@@ -248,7 +242,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         persist({
           ...quote,
           signatures: quote.signatures.filter(
-            (s) => !(s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope)),
+            (s) => !(s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope))
           ),
         });
         return;
@@ -265,7 +259,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         }),
       });
     },
-    [quote, persist],
+    [quote, persist]
   );
 
   const handleIssueQuote = async () => {
@@ -375,9 +369,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       quote={quote}
       busy={busy}
       onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
-      onContactSupplier={() =>
-        alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)
-      }
+      onContactSupplier={() => alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)}
     />
   ) : isInvoiceIssuedClient ? (
     <ClientQuoteInvoiceIssuedSidebar
@@ -385,9 +377,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       busy={busy}
       onConfirmReceipt={() => alert('수령 확인·서명 화면은 준비 중입니다.')}
       onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
-      onContactSupplier={() =>
-        alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)
-      }
+      onContactSupplier={() => alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)}
     />
   ) : (
     <DocumentSidebar
@@ -409,9 +399,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         lastSavedLabel={lastSavedLabel}
         onItemsChange={config.editable ? handleItemsChange : undefined}
         onClientChange={isDraftSupplier ? handleClientChange : undefined}
-        onDownPaymentPercentChange={
-          isDraftSupplier ? handleDownPaymentPercentChange : undefined
-        }
+        onDownPaymentPercentChange={isDraftSupplier ? handleDownPaymentPercentChange : undefined}
         onScheduleChange={isDraftSupplier ? handleScheduleChange : undefined}
         onSignatureChange={
           isDraftSupplier

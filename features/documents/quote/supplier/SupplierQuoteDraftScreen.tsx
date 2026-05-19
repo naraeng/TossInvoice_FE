@@ -1,6 +1,5 @@
 'use client';
 
-
 import { ClientSection } from '@/features/documents/quote/supplier/components/ClientSection';
 import { PaymentSection } from '@/features/documents/quote/supplier/components/PaymentSection';
 import { QuoteDraftHeader } from '@/features/documents/quote/supplier/components/QuoteDraftHeader';
