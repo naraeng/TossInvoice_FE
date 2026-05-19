@@ -104,62 +104,7 @@ function toRowsFromApi(trades: TradeApiRow[]): { inProgress: TradeRow[]; complet
   for (const trade of trades) {
     const isSales = trade.role === 'SELLER';
     const counterpart = isSales ? trade.buyer : trade.seller;
-    const selfCompany = isSales ? trade.seller : trade.buyer;
     const tab: TradeTab = isSales ? 'sales' : 'purchase';
-    const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
-
-    if (status === 'inProgress') {
-      inProgress.push({
-        id: String(trade.tradeId),
-        type: tab,
-        status,
-        company: counterpart.companyName,
-        badgeText: (counterpart.companyName[0] ?? '거').toUpperCase(),
-        badgeClassName: badgeColorBySeed(counterpart.companyName),
-        businessNumber: counterpart.businessNumber,
-        owner: counterpart.ceoName ?? '-',
-        itemSummary: trade.itemsSummary || '-',
-        progressStep: statusToProgressStep(trade.status),
-        cancelled: trade.status === 'CANCELLED',
-        date: formatYmd(trade.createdAt),
-      });
-    } else {
-      completed.push({
-        id: String(trade.tradeId),
-        type: tab,
-        invoiceNo: trade.invoiceDocNumber || `INV-${trade.tradeId}`,
-        counterpart: counterpart.companyName,
-        itemSummary: trade.itemsSummary || '-',
-        amount: formatWon(trade.totalAmount),
-        completedDate: formatYmd(trade.completedAt || trade.createdAt),
-      });
-    }
-  }
-
-  return { inProgress, completed };
-}
-
-function toRowsFromApiWithMe(
-  trades: TradeApiRow[],
-  myBusinessNumber: string,
-): { inProgress: TradeRow[]; completed: CompletedTradeRow[] } {
-  const normalizedMe = myBusinessNumber.replace(/\D/g, '');
-  if (normalizedMe.length !== 10) return { inProgress: [], completed: [] };
-
-  const inProgress: TradeRow[] = [];
-  const completed: CompletedTradeRow[] = [];
-
-  for (const trade of trades) {
-    const sellerBn = (trade.seller.businessNumber ?? '').replace(/\D/g, '');
-    const buyerBn = (trade.buyer.businessNumber ?? '').replace(/\D/g, '');
-
-    const isMeSeller = sellerBn === normalizedMe;
-    const isMeBuyer = buyerBn === normalizedMe;
-    if (!isMeSeller && !isMeBuyer) continue;
-
-    const counterpart = isMeSeller ? trade.buyer : trade.seller;
-    const selfCompany = isMeSeller ? trade.seller : trade.buyer;
-    const tab: TradeTab = isMeSeller ? 'sales' : 'purchase';
     const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
 
     if (status === 'inProgress') {
@@ -199,10 +144,10 @@ function parseTradeDate(value: string) {
 
 export default function TradeBoard({
   trades,
-  myBusinessNumber,
+  loading = false,
 }: {
   trades: TradeApiRow[];
-  myBusinessNumber: string;
+  loading?: boolean;
 }) {
   const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState<TradeFilter>('inProgress');
@@ -212,13 +157,8 @@ export default function TradeBoard({
   const [activeSort, setActiveSort] = useState<SortOption>('recentDesc');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
-  const tradeRows = useMemo(
-    () =>
-      myBusinessNumber
-        ? toRowsFromApiWithMe(trades, myBusinessNumber)
-        : toRowsFromApi(trades),
-    [myBusinessNumber, trades],
-  );
+  // trade.role은 API가 호출자 시점으로 설정한 값이므로 그대로 사용
+  const tradeRows = useMemo(() => toRowsFromApi(trades), [trades]);
 
   const rows = useMemo(() => {
     const filteredRows = tradeRows.inProgress.filter((row) => row.type === activeTab && row.status === activeFilter);
@@ -239,7 +179,7 @@ export default function TradeBoard({
   const activeSortLabel = SORT_OPTIONS.find((option) => option.id === activeSort)?.label ?? '최근 거래순';
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 transition-opacity ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2.5">
           {FILTER_OPTIONS.map((option) => {

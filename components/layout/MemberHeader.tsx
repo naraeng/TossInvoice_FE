@@ -27,7 +27,7 @@ export default function MemberHeader() {
   }));
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const { notices, loading: notifLoading } = useNotifications();
+  const { notices, loading: notifLoading, hasNext, loadingMore, loadMore } = useNotifications();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -134,12 +134,35 @@ export default function MemberHeader() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-slate-900">{n.title}</p>
                         <p className="mt-0.5 truncate text-xs text-slate-400">{n.desc}</p>
+                        {(n.senderCompanyName ?? n.tradeTotalAmount) ? (
+                          <p className="mt-0.5 text-[11px] text-slate-400">
+                            {n.senderCompanyName && (
+                              <span className="font-medium text-slate-500">{n.senderCompanyName}</span>
+                            )}
+                            {n.senderCompanyName && n.tradeTotalAmount ? ' · ' : ''}
+                            {n.tradeTotalAmount !== null && (
+                              <span>{n.tradeTotalAmount.toLocaleString('ko-KR')}원</span>
+                            )}
+                          </p>
+                        ) : null}
                       </div>
                       <span className="shrink-0 text-[11px] text-slate-300">{n.time}</span>
                     </li>
                   ))
                 )}
               </ul>
+              {hasNext && (
+                <div className="border-t border-slate-100 px-4 py-2.5">
+                  <button
+                    type="button"
+                    disabled={loadingMore}
+                    onClick={loadMore}
+                    className="w-full rounded-lg py-1.5 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {loadingMore ? '불러오는 중...' : '더 보기'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

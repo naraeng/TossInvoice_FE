@@ -2,15 +2,17 @@ export type TradeHeaderProps = {
   totalCounterparties: number;
   inProgressCount: number;
   completedCount: number;
+  totalElements: number;
 };
 
 export default function TradeHeader({
   totalCounterparties,
   inProgressCount,
   completedCount,
+  totalElements,
 }: TradeHeaderProps) {
   const statCards = [
-    { label: '총 거래처', value: totalCounterparties, valueClassName: 'text-slate-900' },
+    { label: '총 거래건', value: totalElements, valueClassName: 'text-slate-900' },
     { label: '거래 중', value: inProgressCount, valueClassName: 'text-blue-600' },
     { label: '완료 거래', value: completedCount, valueClassName: 'text-emerald-600' },
   ] as const;

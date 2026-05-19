@@ -14,11 +14,19 @@ export type NotificationType =
 export interface NotificationApiRow {
   notificationId: number;
   senderId: number | null;
+  senderCompanyName: string | null;
   receiverId: number;
   tradeId: number | null;
+  tradeTotalAmount: number | null;
   notificationType: NotificationType;
   message: string;
   createdAt: string; // "2026-05-19 10:00:00"
+}
+
+export interface NotificationPageResponse {
+  notifications: NotificationApiRow[];
+  nextCursorId: number | null;
+  hasNext: boolean;
 }
 
 export interface Notice {
@@ -28,6 +36,8 @@ export interface Notice {
   desc: string;
   time: string;
   unread: boolean;
+  senderCompanyName: string | null;
+  tradeTotalAmount: number | null;
 }
 
 const ICON_MAP: Record<NotificationType, NoticeIcon> = {
@@ -76,5 +86,7 @@ export function apiRowToNotice(row: NotificationApiRow): Notice {
     desc: row.message,
     time: toRelativeTime(row.createdAt),
     unread: false,
+    senderCompanyName: row.senderCompanyName ?? null,
+    tradeTotalAmount: row.tradeTotalAmount ?? null,
   };
 }

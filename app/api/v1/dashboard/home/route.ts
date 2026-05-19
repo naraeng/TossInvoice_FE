@@ -6,16 +6,9 @@ const BACKEND_BASE_URL =
 export async function GET(request: Request) {
   const authorization = request.headers.get('authorization');
 
-  const { searchParams } = new URL(request.url);
-  const upstreamUrl = new URL(`${BACKEND_BASE_URL}/api/v1/notifications`);
-  const cursorId = searchParams.get('cursorId');
-  const size = searchParams.get('size');
-  if (cursorId !== null) upstreamUrl.searchParams.set('cursorId', cursorId);
-  if (size !== null) upstreamUrl.searchParams.set('size', size);
-
   let upstream: Response;
   try {
-    upstream = await fetch(upstreamUrl.toString(), {
+    upstream = await fetch(`${BACKEND_BASE_URL}/api/v1/dashboard/home`, {
       method: 'GET',
       headers: {
         ...(authorization ? { Authorization: authorization } : {}),
@@ -36,9 +29,7 @@ export async function GET(request: Request) {
   if (isJson) {
     try {
       const parsed = JSON.parse(bodyText) as unknown;
-      const response = NextResponse.json(parsed, { status: upstream.status });
-      response.headers.delete('www-authenticate');
-      return response;
+      return NextResponse.json(parsed, { status: upstream.status });
     } catch {
       return NextResponse.json(
         { message: bodyText || 'Invalid JSON response from backend.' },
@@ -47,12 +38,10 @@ export async function GET(request: Request) {
     }
   }
 
-  const response = new NextResponse(bodyText, {
+  return new NextResponse(bodyText, {
     status: upstream.status,
     headers: {
       'content-type': contentType || 'text/plain; charset=utf-8',
     },
   });
-  response.headers.delete('www-authenticate');
-  return response;
 }

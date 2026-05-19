@@ -19,3 +19,10 @@ export type TradeApiRow = {
   completedAt?: string | null;
   createdAt: string;
 };
+
+export type TradePageResponse = {
+  trades: TradeApiRow[];
+  currentPage: number;
+  totalPages: number;
+  totalElements: number;
+};
