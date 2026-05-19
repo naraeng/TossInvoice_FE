@@ -11,6 +11,7 @@ const STATUS_ORDER: QuoteStatus[] = [
   'PO_ISSUED',
   'PO_CONFIRMED',
   'INVOICE_ISSUED',
+  'INVOICE_COMPLETED',
 ];
 
 function statusIndex(status: QuoteStatus) {

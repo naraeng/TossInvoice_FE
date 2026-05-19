@@ -45,7 +45,7 @@ export function SupplierInvoiceDraftSidebar({
     <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.25)]">
       <div className="h-1 bg-[#FF9500]" aria-hidden />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-8 p-6">
         <section className="py-3">
           <p className="mb-1 text-sm font-bold text-[#FF9500]">🌟 최종 Invoice 발행 단계</p>
           <p className="text-lg font-bold text-slate-800">PO 양측 서명 완료</p>

@@ -7,6 +7,7 @@ export const DEFAULT_SUPPLIER_PROFILE: CompanyProfile = {
   representative: '박장규',
   address: '서울시 강남구 테헤란로 123, 4층',
   contact: '02-1234-5678 · pi@jangfood.co.kr',
+  bankAccount: '국민은행 · 123456-78-901234',
   verified: true,
 };
 
@@ -45,11 +46,13 @@ export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
     bankVerified: quote.bankVerified ?? true,
     supplierProfile: quote.supplierProfile ?? DEFAULT_SUPPLIER_PROFILE,
     clientProfile: quote.clientProfile ?? DEFAULT_CLIENT_PROFILE,
-    transactionTerms: quote.transactionTerms ?? {
-      paymentMethod: '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
+    transactionTerms: {
+      paymentMethod:
+        quote.transactionTerms?.paymentMethod ??
+        '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
       deliverySchedule:
-        deliverySummary ??
         quote.transactionTerms?.deliverySchedule ??
+        deliverySummary ??
         '발주처와 일정 합의 후 반영',
     },
     signatures: hasSupplierSig

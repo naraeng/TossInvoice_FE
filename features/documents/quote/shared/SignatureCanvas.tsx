@@ -6,6 +6,7 @@ type Props = {
   initialImage?: string;
   onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
   className?: string;
+  clearLabel?: string;
 };
 
 function canvasHasInk(canvas: HTMLCanvasElement) {
@@ -18,7 +19,12 @@ function canvasHasInk(canvas: HTMLCanvasElement) {
   return false;
 }
 
-export function SignatureCanvas({ initialImage, onSignatureChange, className }: Props) {
+export function SignatureCanvas({
+  initialImage,
+  onSignatureChange,
+  className,
+  clearLabel = '서명 지우기',
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -122,13 +128,15 @@ export function SignatureCanvas({ initialImage, onSignatureChange, className }: 
         />
       </div>
       {hasSignature && (
-        <button
-          type="button"
-          onClick={clear}
-          className="mt-2 text-xs font-semibold text-slate-500 hover:text-slate-700"
-        >
-          서명 지우기
-        </button>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={clear}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+          >
+            {clearLabel}
+          </button>
+        </div>
       )}
     </div>
   );

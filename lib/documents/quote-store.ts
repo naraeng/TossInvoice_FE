@@ -28,6 +28,13 @@ const CLIENT_COMPANY: DocumentUser = {
   role: 'CLIENT',
 };
 
+/** 수주처가 발주처를 검색·선택하기 전 초안용 */
+const EMPTY_CLIENT: DocumentUser = {
+  companyId: '',
+  companyName: '',
+  role: 'CLIENT',
+};
+
 const DEMO_QUOTE_IDS = [
   'quote-issued',
   'quote-po-draft',
@@ -278,11 +285,20 @@ export function upsertQuoteFromPatch(quoteId: string, patch: Partial<QuoteDocume
   return true;
 }
 
-export function createDraftQuote(current: DocumentCompanyContext): QuoteDocument {
+export type CreateDraftQuoteOptions = {
+  /** 거래 시작 등 — 로그인 역할과 무관하게 수주처(공급자) 초안 */
+  asSupplier?: boolean;
+};
+
+export function createDraftQuote(
+  current: DocumentCompanyContext,
+  options?: CreateDraftQuoteOptions,
+): QuoteDocument {
   const id = `quote-${Date.now()}`;
   const items = createDefaultDraftItems();
+  const asSupplier = options?.asSupplier ?? isSupplierContext(current);
 
-  const supplier: DocumentUser = isSupplierContext(current)
+  const supplier: DocumentUser = asSupplier
     ? {
         companyId: current.companyId,
         companyName: current.companyName,
@@ -290,8 +306,10 @@ export function createDraftQuote(current: DocumentCompanyContext): QuoteDocument
       }
     : DEFAULT_SUPPLIER;
 
-  const client: DocumentUser = isSupplierContext(current)
-    ? CLIENT_COMPANY
+  const client: DocumentUser = asSupplier
+    ? current.companyId === CLIENT_COMPANY.companyId
+      ? EMPTY_CLIENT
+      : CLIENT_COMPANY
     : {
         companyId: current.companyId,
         companyName: current.companyName,
@@ -308,7 +326,7 @@ export function createDraftQuote(current: DocumentCompanyContext): QuoteDocument
     downPaymentPercent: DEFAULT_DOWN_PAYMENT_PERCENT,
     paymentTerms: formatPaymentTerms(DEFAULT_DOWN_PAYMENT_PERCENT),
     bankVerified: true,
-    supplierProfile: isSupplierContext(current) ? DEFAULT_SUPPLIER_PROFILE : undefined,
+    supplierProfile: asSupplier ? DEFAULT_SUPPLIER_PROFILE : undefined,
     clientProfile: DEFAULT_CLIENT_PROFILE,
   });
   saveQuote(quote);

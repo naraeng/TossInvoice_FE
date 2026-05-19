@@ -10,6 +10,8 @@ import { ClientQuotePoDraftSidebar } from '@/features/documents/quote/client/Cli
 import { ClientQuoteInvoiceIssuedSidebar } from '@/features/documents/quote/client/ClientQuoteInvoiceIssuedSidebar';
 import { ClientQuotePoConfirmedSidebar } from '@/features/documents/quote/client/ClientQuotePoConfirmedSidebar';
 import { ClientQuotePoIssuedSidebar } from '@/features/documents/quote/client/ClientQuotePoIssuedSidebar';
+import { InvoiceCompletedSidebar } from '@/features/documents/invoice/shared/InvoiceCompletedSidebar';
+import { SupplierInvoiceIssuedSidebar } from '@/features/documents/invoice/supplier/SupplierInvoiceIssuedSidebar';
 import { SupplierQuotePoConfirmedSidebar } from '@/features/documents/quote/supplier/SupplierQuotePoConfirmedSidebar';
 import { SupplierQuotePoIssuedSidebar } from '@/features/documents/quote/supplier/SupplierQuotePoIssuedSidebar';
 import { QuoteScreenRouter } from '@/features/documents/quote/QuoteScreenRouter';
@@ -27,9 +29,25 @@ import {
   normalizeProductionDays,
   type QuoteSchedule,
 } from '@/lib/documents/schedule';
+import { syncQuoteViaApi } from '@/lib/documents/sync-quote-client';
+import { fetchTradeDetail } from '@/lib/trades/fetch-trade-detail';
+import { mapTradeDetailToQuote } from '@/lib/trades/map-trade-to-quote';
+import { getIssuePurchaseOrderErrorMessage } from '@/lib/trades/issue-purchase-order-errors';
+import { issuePurchaseOrder } from '@/lib/trades/issue-purchase-order';
+import { getRejectPurchaseOrderErrorMessage } from '@/lib/trades/reject-purchase-order-errors';
+import { rejectPurchaseOrder } from '@/lib/trades/reject-purchase-order';
+import { getRejectTradeErrorMessage } from '@/lib/trades/reject-trade-errors';
+import { rejectTrade } from '@/lib/trades/reject-trade';
+import { getSignInvoiceErrorMessage } from '@/lib/trades/sign-invoice-errors';
+import { signInvoice } from '@/lib/trades/sign-invoice';
+import { getSignPurchaseOrderErrorMessage } from '@/lib/trades/sign-purchase-order-errors';
+import { signPurchaseOrder } from '@/lib/trades/sign-purchase-order';
+import { getStartPurchaseOrderErrorMessage } from '@/lib/trades/start-purchase-order-errors';
+import { startPurchaseOrder } from '@/lib/trades/start-purchase-order';
 import { getStartTradeErrorMessage } from '@/lib/trades/start-trade-errors';
 import { startTrade } from '@/lib/trades/start-trade';
 import {
+  getInvoiceClientSignature,
   getPiSupplierSignature,
   getPoClientSignature,
   getPoSupplierSignature,
@@ -63,6 +81,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   const [hasSupplierPoSignature, setHasSupplierPoSignature] = useState(
     () => !!getPoSupplierSignature(quote)?.signatureImage
   );
+  const [hasClientInvoiceSignature, setHasClientInvoiceSignature] = useState(
+    () => !!getInvoiceClientSignature(quote)?.signatureImage,
+  );
 
   const config = getScreenConfig(viewerRole, quote.status);
   const isDraftSupplier = viewerRole === 'SUPPLIER' && quote.status === 'DRAFT';
@@ -74,6 +95,8 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   const isPoConfirmedSupplier = isPoConfirmed && viewerRole === 'SUPPLIER';
   const isPoConfirmedClient = isPoConfirmed && viewerRole === 'CLIENT';
   const isInvoiceIssuedClient = quote.status === 'INVOICE_ISSUED' && viewerRole === 'CLIENT';
+  const isInvoiceIssuedSupplier = quote.status === 'INVOICE_ISSUED' && viewerRole === 'SUPPLIER';
+  const isInvoiceCompleted = quote.status === 'INVOICE_COMPLETED';
   const useWideLayout =
     isDraftSupplier ||
     isIssued ||
@@ -81,7 +104,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     isPoIssued ||
     isPoConfirmedSupplier ||
     isPoConfirmedClient ||
-    isInvoiceIssuedClient;
+    isInvoiceIssuedClient ||
+    isInvoiceIssuedSupplier ||
+    isInvoiceCompleted;
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -89,6 +114,41 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     }, 5000);
     return () => clearInterval(tick);
   }, [lastSavedAt]);
+
+  useEffect(() => {
+    const tradeId = initialQuote.tradeId;
+    if (
+      tradeId == null ||
+      (initialQuote.status !== 'INVOICE_ISSUED' && initialQuote.status !== 'INVOICE_COMPLETED')
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const detail = await fetchTradeDetail(tradeId);
+        const perspectiveRole = viewerRole === 'SUPPLIER' ? 'SELLER' : 'BUYER';
+        const nextQuote = {
+          ...mapTradeDetailToQuote(detail, { perspectiveRole }),
+          viewerRoleHint: initialQuote.viewerRoleHint ?? viewerRole,
+        };
+
+        if (!cancelled) {
+          setQuote(nextQuote);
+          saveQuote(nextQuote);
+          setHasClientInvoiceSignature(!!getInvoiceClientSignature(nextQuote)?.signatureImage);
+        }
+      } catch {
+        // 스토어 데이터 유지
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialQuote.id, initialQuote.status, initialQuote.tradeId, initialQuote.viewerRoleHint, viewerRole]);
 
   const persist = useCallback((next: QuoteDocument) => {
     setQuote(next);
@@ -173,6 +233,70 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
 
   const handleShippingAddressChange = (shippingAddress: string) => {
     persist({ ...quote, shippingAddress: shippingAddress || undefined });
+  };
+
+  const handleClientInvoiceSignature = useCallback(
+    (signed: boolean, imageDataUrl?: string) => {
+      setHasClientInvoiceSignature(signed);
+      const signerName =
+        quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+
+      if (!signed || !imageDataUrl) {
+        persist({
+          ...quote,
+          signatures: quote.signatures.filter(
+            (s) => !(s.party === 'CLIENT' && s.scope === 'INVOICE'),
+          ),
+        });
+        return;
+      }
+
+      persist({
+        ...quote,
+        signatures: upsertSignature(quote.signatures, {
+          party: 'CLIENT',
+          scope: 'INVOICE',
+          signedAt: new Date().toISOString(),
+          signerName,
+          signatureImage: imageDataUrl,
+        }),
+      });
+    },
+    [quote, persist],
+  );
+
+  const handleConfirmFinalInvoice = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    const signatureImage = getInvoiceClientSignature(quote)?.signatureImage;
+    if (!signatureImage) {
+      alert('최종 서명을 완료해 주세요.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await signInvoice(tradeId, signatureImage);
+      const detail = await fetchTradeDetail(tradeId);
+      const nextQuote = {
+        ...mapTradeDetailToQuote(detail, { perspectiveRole: 'BUYER' }),
+        viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
+      };
+      await syncQuoteViaApi(nextQuote);
+      setQuote(nextQuote);
+      saveQuote(nextQuote);
+      setHasClientInvoiceSignature(!!getInvoiceClientSignature(nextQuote)?.signatureImage);
+      router.refresh();
+      alert('최종 서명이 완료되었습니다. 잔금 송금이 처리되었고, 보관용 invoice가 생성되었습니다.');
+    } catch (error: unknown) {
+      alert(getSignInvoiceErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleClientPoSignature = useCallback(
@@ -280,6 +404,154 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     }
   };
 
+  const handleIssuePo = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    const signatureImage = getPoClientSignature(quote)?.signatureImage;
+    if (!signatureImage) {
+      alert('서명 이미지가 필요합니다.');
+      return;
+    }
+
+    if (!quote.deliveryDate?.trim()) {
+      alert('납품 확정일을 입력해 주세요.');
+      return;
+    }
+
+    if (!quote.shippingAddress?.trim()) {
+      alert('배송 주소를 입력해 주세요.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await issuePurchaseOrder(tradeId, quote, signatureImage);
+      const detail = await fetchTradeDetail(tradeId);
+      const nextQuote = {
+        ...mapTradeDetailToQuote(detail),
+        viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
+      };
+      await syncQuoteViaApi(nextQuote);
+      setQuote(nextQuote);
+      router.refresh();
+    } catch (error: unknown) {
+      alert(getIssuePurchaseOrderErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSignPo = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    const signatureImage = getPoSupplierSignature(quote)?.signatureImage;
+    if (!signatureImage) {
+      alert('서명 이미지가 필요합니다.');
+      return;
+    }
+
+    if (!quote.deliveryDate?.trim()) {
+      alert('납품 확정일을 확인해 주세요.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await signPurchaseOrder(tradeId, quote, signatureImage);
+      const detail = await fetchTradeDetail(tradeId);
+      const nextQuote = {
+        ...mapTradeDetailToQuote(detail),
+        viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
+      };
+      await syncQuoteViaApi(nextQuote);
+      setQuote(nextQuote);
+      router.refresh();
+    } catch (error: unknown) {
+      alert(getSignPurchaseOrderErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectPo = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '발주서(PO)를 반려하고 거래를 취소할까요?\n발주처에 수정 요청이 전달됩니다.',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await rejectPurchaseOrder(tradeId);
+      router.push('/trade');
+    } catch (error: unknown) {
+      alert(getRejectPurchaseOrderErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectPi = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '견적서(PI)를 거절하고 거래를 취소할까요?\n발주서 작성이 시작된 거래는 취소할 수 없습니다.',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await rejectTrade(tradeId);
+      router.push('/trade?tab=purchase');
+    } catch (error: unknown) {
+      alert(getRejectTradeErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleStartPo = async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없습니다.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await startPurchaseOrder(tradeId);
+      const detail = await fetchTradeDetail(tradeId);
+      const nextQuote = {
+        ...mapTradeDetailToQuote(detail),
+        viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
+      };
+      await syncQuoteViaApi(nextQuote);
+      setQuote(nextQuote);
+      router.refresh();
+    } catch (error: unknown) {
+      alert(getStartPurchaseOrderErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleAction = async (action: string) => {
     setBusy(true);
     try {
@@ -334,8 +606,8 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     <ClientQuoteIssuedSidebar
       quote={quote}
       busy={busy}
-      onStartPo={() => handleAction('START_PO')}
-      onReject={() => handleAction('REJECT_QUOTE')}
+      onStartPo={() => void handleStartPo()}
+      onReject={() => void handleRejectPi()}
     />
   ) : isPoDraftClient ? (
     <ClientQuotePoDraftSidebar
@@ -344,7 +616,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       hasShippingAddress={!!quote.shippingAddress?.trim()}
       hasSignature={hasClientPoSignature}
       busy={busy}
-      onIssuePo={() => handleAction('ISSUE_PO')}
+      onIssuePo={() => void handleIssuePo()}
       onSaveDraft={handleSaveDraft}
     />
   ) : isPoIssued && viewerRole === 'CLIENT' ? (
@@ -354,8 +626,8 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       quote={quote}
       busy={busy}
       canSign={hasSupplierPoSignature}
-      onSignPo={() => handleAction('SIGN_PO')}
-      onReject={() => alert('반려/수정 요청이 발주처에 전달되었습니다.')}
+      onSignPo={() => void handleSignPo()}
+      onReject={() => void handleRejectPo()}
     />
   ) : isPoConfirmedSupplier ? (
     <SupplierQuotePoConfirmedSidebar
@@ -371,13 +643,40 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
       onContactSupplier={() => alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)}
     />
+  ) : isInvoiceCompleted ? (
+    <InvoiceCompletedSidebar
+      quote={quote}
+      busy={busy}
+      contactLabel={
+        viewerRole === 'CLIENT' ? '수주처에 문의' : '발주처에 문의'
+      }
+      onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
+      onContact={() =>
+        alert(
+          viewerRole === 'CLIENT'
+            ? `${quote.supplier.companyName} 담당자에게 연결됩니다.`
+            : '발주처 문의 채널로 연결됩니다.',
+        )
+      }
+      onBackToTrade={() => router.push('/trade')}
+    />
   ) : isInvoiceIssuedClient ? (
     <ClientQuoteInvoiceIssuedSidebar
       quote={quote}
       busy={busy}
-      onConfirmReceipt={() => alert('수령 확인·서명 화면은 준비 중입니다.')}
+      canConfirm={hasClientInvoiceSignature}
+      onConfirmReceipt={() => void handleConfirmFinalInvoice()}
+      onReportIssue={() => alert('문제 신고 접수는 준비 중입니다.')}
       onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
       onContactSupplier={() => alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)}
+    />
+  ) : isInvoiceIssuedSupplier ? (
+    <SupplierInvoiceIssuedSidebar
+      quote={quote}
+      busy={busy}
+      onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
+      onContactClient={() => alert('발주처 문의 채널로 연결됩니다.')}
+      onBackToTrade={() => router.push('/trade')}
     />
   ) : (
     <DocumentSidebar
@@ -409,6 +708,10 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
               : isPoIssuedSupplier
                 ? handleSupplierPoSignature
                 : undefined
+        }
+        hasClientInvoiceSignature={isInvoiceIssuedClient ? hasClientInvoiceSignature : undefined}
+        onInvoiceSignatureChange={
+          isInvoiceIssuedClient ? handleClientInvoiceSignature : undefined
         }
         onDeliveryDateChange={isPoDraftClient ? handleDeliveryDateChange : undefined}
         onShippingAddressChange={isPoDraftClient ? handleShippingAddressChange : undefined}

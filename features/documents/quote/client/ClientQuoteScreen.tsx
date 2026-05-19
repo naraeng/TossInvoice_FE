@@ -1,5 +1,6 @@
 import type { QuoteDocument } from '@/types/documents/document';
 
+import { InvoiceCompletedScreen } from '@/features/documents/invoice/shared/InvoiceCompletedScreen';
 import { ClientQuoteInvoiceIssuedScreen } from './ClientQuoteInvoiceIssuedScreen';
 import { ClientQuoteIssuedScreen } from './ClientQuoteIssuedScreen';
 import { ClientQuotePoConfirmedScreen } from './ClientQuotePoConfirmedScreen';
@@ -14,6 +15,8 @@ type Props = {
   onDeliveryDateChange?: (value: string) => void;
   onShippingAddressChange?: (value: string) => void;
   onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
+  hasClientInvoiceSignature?: boolean;
+  onInvoiceSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
 export function ClientQuoteScreen({
@@ -21,6 +24,8 @@ export function ClientQuoteScreen({
   onDeliveryDateChange,
   onShippingAddressChange,
   onSignatureChange,
+  hasClientInvoiceSignature,
+  onInvoiceSignatureChange,
 }: Props) {
   if (quote.status === 'ISSUED') {
     return <ClientQuoteIssuedScreen quote={quote} />;
@@ -34,8 +39,18 @@ export function ClientQuoteScreen({
     return <ClientQuotePoConfirmedScreen quote={quote} />;
   }
 
+  if (quote.status === 'INVOICE_COMPLETED') {
+    return <InvoiceCompletedScreen quote={quote} />;
+  }
+
   if (quote.status === 'INVOICE_ISSUED') {
-    return <ClientQuoteInvoiceIssuedScreen quote={quote} />;
+    return (
+      <ClientQuoteInvoiceIssuedScreen
+        quote={quote}
+        hasClientInvoiceSignature={hasClientInvoiceSignature}
+        onInvoiceSignatureChange={onInvoiceSignatureChange}
+      />
+    );
   }
 
   if (quote.status === 'PO_DRAFT') {

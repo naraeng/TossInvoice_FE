@@ -5,12 +5,12 @@ export type TradeHeaderProps = {
 };
 
 export default function TradeHeader({
-  totalPartners,
+  // totalPartners,
   activePartners,
   newPartnersThisMonth,
 }: TradeHeaderProps) {
   const statCards = [
-    { label: '총 거래처', value: totalPartners, valueClassName: 'text-slate-900' },
+    // { label: '총 거래처', value: totalPartners, valueClassName: 'text-slate-900' },
     { label: '거래 중', value: activePartners, valueClassName: 'text-blue-600' },
     { label: '이번 달 신규', value: newPartnersThisMonth, valueClassName: 'text-emerald-600' },
   ] as const;

@@ -21,19 +21,14 @@ export function ClientQuoteInvoiceIssuedHeader({ quote }: Props) {
             <span className="text-slate-700">{invNo}</span>
           </nav>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            인보이스 수신
+            최종 invoice (거래명세서·납품확인서)
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
             수주처(
-            <span className="font-semibold text-slate-700">{quote.supplier.companyName}</span>
-            )가 최종 invoice를 발행했어요. 물건 수령 후 본인 확인·서명을 진행하면 잔금이
-            정산됩니다.
+            <span className="font-semibold text-slate-700">{quote.supplier.companyName}</span>) 발행
+            invoice · 물건 확인 후 최종 서명하면 잔금이 자동 송금됩니다.
           </p>
         </div>
-
-        <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
-          📨 invoice 도착 · 수령 확인 대기
-        </span>
       </div>
     </header>
   );

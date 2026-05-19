@@ -1,15 +1,23 @@
+'use client';
+
+import { ClientInvoiceSignatureSection } from '@/features/documents/quote/client/components/ClientInvoiceSignatureSection';
 import { InvoicePaymentProgress } from '@/features/documents/invoice/supplier/components/InvoicePaymentProgress';
 import { InvoiceShippingSection } from '@/features/documents/invoice/supplier/components/InvoiceShippingSection';
-import { InvoiceSignatureSection } from '@/features/documents/invoice/supplier/components/InvoiceSignatureSection';
 import { TransactionStatementDocument } from '@/features/documents/invoice/supplier/components/TransactionStatementDocument';
 import { ClientQuoteInvoiceIssuedHeader } from '@/features/documents/quote/client/ClientQuoteInvoiceIssuedHeader';
 import type { QuoteDocument } from '@/types/documents/document';
 
 type Props = {
   quote: QuoteDocument;
+  hasClientInvoiceSignature?: boolean;
+  onInvoiceSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
-export function ClientQuoteInvoiceIssuedScreen({ quote }: Props) {
+export function ClientQuoteInvoiceIssuedScreen({
+  quote,
+  hasClientInvoiceSignature,
+  onInvoiceSignatureChange,
+}: Props) {
   const trackingNumber = quote.trackingNumber ?? '';
 
   return (
@@ -19,7 +27,11 @@ export function ClientQuoteInvoiceIssuedScreen({ quote }: Props) {
         <TransactionStatementDocument quote={quote} trackingNumber={trackingNumber}>
           <InvoiceShippingSection quote={quote} trackingNumber={trackingNumber} readOnly />
           <InvoicePaymentProgress quote={quote} />
-          <InvoiceSignatureSection quote={quote} />
+          <ClientInvoiceSignatureSection
+            quote={quote}
+            hasClientSignature={hasClientInvoiceSignature}
+            onSignatureChange={onInvoiceSignatureChange}
+          />
         </TransactionStatementDocument>
       </article>
     </div>

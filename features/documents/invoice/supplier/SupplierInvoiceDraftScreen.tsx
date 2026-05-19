@@ -11,12 +11,16 @@ type Props = {
   quote: QuoteDocument;
   trackingNumber: string;
   onTrackingNumberChange: (value: string) => void;
+  hasInvoiceSignature?: boolean;
+  onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
 export function SupplierInvoiceDraftScreen({
   quote,
   trackingNumber,
   onTrackingNumberChange,
+  hasInvoiceSignature,
+  onSignatureChange,
 }: Props) {
   return (
     <div className="space-y-5">
@@ -29,7 +33,11 @@ export function SupplierInvoiceDraftScreen({
             onTrackingNumberChange={onTrackingNumberChange}
           />
           <InvoicePaymentProgress quote={quote} />
-          <InvoiceSignatureSection quote={quote} />
+          <InvoiceSignatureSection
+            quote={quote}
+            hasInvoiceSignature={hasInvoiceSignature}
+            onSignatureChange={onSignatureChange}
+          />
         </TransactionStatementDocument>
       </article>
     </div>

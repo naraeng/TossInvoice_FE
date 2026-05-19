@@ -13,11 +13,26 @@ export async function POST(request: Request) {
   }
 
   const company = resolveDocumentCompanyFromMe(me);
-  const quote = createDraftQuote(company);
+
+  let asSupplier = false;
+  try {
+    const body = (await request.json()) as { asSupplier?: boolean };
+    asSupplier = body.asSupplier === true;
+  } catch {
+    // body 없음 → 기존 동작(프로필 역할 기준)
+  }
+
+  const quote = createDraftQuote(company, { asSupplier });
+  const viewerRole =
+    company.companyId === quote.supplier.companyId
+      ? 'SUPPLIER'
+      : company.companyId === quote.client.companyId
+        ? 'CLIENT'
+        : company.role;
 
   return NextResponse.json({
     ok: true,
     quote,
-    viewerRole: company.role,
+    viewerRole,
   });
 }

@@ -3,6 +3,8 @@ import type { QuoteDocument } from '@/types/documents/document';
 
 import { SupplierQuoteDraftScreen } from './SupplierQuoteDraftScreen';
 import { SupplierQuoteIssuedScreen } from './SupplierQuoteIssuedScreen';
+import { InvoiceCompletedScreen } from '@/features/documents/invoice/shared/InvoiceCompletedScreen';
+import { SupplierInvoiceIssuedScreen } from '@/features/documents/invoice/supplier/SupplierInvoiceIssuedScreen';
 import { SupplierQuotePoConfirmedScreen } from './SupplierQuotePoConfirmedScreen';
 import { SupplierQuotePoIssuedScreen } from './SupplierQuotePoIssuedScreen';
 import type { QuoteSchedule } from '@/lib/documents/schedule';
@@ -44,14 +46,16 @@ export function SupplierQuoteScreen({
     return <SupplierQuotePoConfirmedScreen quote={quote} />;
   }
 
+  if (quote.status === 'INVOICE_COMPLETED') {
+    return <InvoiceCompletedScreen quote={quote} />;
+  }
+
   if (quote.status === 'INVOICE_ISSUED') {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-8 text-center">
-        <p className="text-lg font-bold text-emerald-900">최종 invoice 발행 완료</p>
-        <p className="mt-2 text-sm text-emerald-800">
-          {quote.invoiceDocumentNo ?? 'Invoice'}가 발주처에 전송되었습니다.
-        </p>
-      </div>
+      <SupplierInvoiceIssuedScreen
+        quote={quote}
+        trackingNumber={quote.trackingNumber ?? ''}
+      />
     );
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { AlertTriangle, Check, FileCheck2 } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
+import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { PoHorizontalStepper } from '@/features/documents/quote/client/components/PoHorizontalStepper';
@@ -45,31 +46,32 @@ export function ClientQuotePoDraftSidebar({
 
   return (
     <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.25)]">
-      <div className="h-1 bg-[#3182F6]" aria-hidden />
+      <div className="h-1 bg-violet-600" aria-hidden />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-8 p-6">
         <section>
           <div className="flex gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50">
-              <FileCheck2 className="size-5 text-[#3182F6]" />
-            </div>
             <div>
+              <p className="text-sm font-bold text-violet-600 mb-2">🔄 자동 변환됨</p>
               <p className="text-sm font-bold text-slate-900">견적서가 발주서로 전환되었어요</p>
               <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                수주처가 서명한 견적 내용이 그대로 반영됐어요. 납품 일정과 서명만 완료하면
-                발행할 수 있어요.
+                수주처가 서명한 견적 내용이 그대로 반영됐어요. 납품 일정과 서명만 완료하면 발행할 수
+                있어요.
               </p>
             </div>
           </div>
           <div className="mt-4 rounded-xl bg-violet-50 px-3.5 py-3 ring-1 ring-violet-100">
-            <p className="text-[10px] font-semibold text-violet-600">참조 견적서</p>
+            <p className="text-[10px] font-semibold text-violet-600">원본 PI 견적서</p>
             <p className="mt-0.5 text-sm font-bold text-violet-900">{piNo}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              발행 : {quote.poIssuedAt ? format(quote.poIssuedAt, 'yyyy.MM.dd') : '-'}
+            </p>
           </div>
         </section>
 
         <section>
-          <p className="text-sm font-bold text-slate-800">발주서 발행 체크리스트</p>
-          <ul className="mt-3 space-y-2.5">
+          <p className="text-sm font-bold text-slate-800">📋 발주서 발행 체크리스트</p>
+          <ul className="mt-4 space-y-2.5">
             {checklist.map((item) => (
               <li key={item.id} className="flex items-center gap-2.5">
                 {item.done ? (
@@ -95,7 +97,7 @@ export function ClientQuotePoDraftSidebar({
         </section>
 
         <section>
-          <p className="text-sm font-bold text-slate-800">거래 진행</p>
+          <p className="text-sm font-bold text-slate-800">🎯 거래 진행</p>
           <div className="mt-4">
             <PoHorizontalStepper />
           </div>
@@ -110,9 +112,10 @@ export function ClientQuotePoDraftSidebar({
 
         <section className="space-y-3">
           <Button
-            className="h-auto w-full flex-col gap-1 rounded-xl bg-[#3182F6] py-3.5 text-sm font-bold shadow-[0_4px_14px_-4px_rgba(49,130,246,0.55)] hover:bg-[#1b64da]"
+            type="button"
+            className="h-auto w-full flex-col gap-1 rounded-xl bg-[#3182F6] py-3.5 text-sm font-bold shadow-[0_4px_14px_-4px_rgba(49,130,246,0.55)] hover:bg-[#1b64da] disabled:opacity-60"
             onClick={onIssuePo}
-            disabled={busy || !canIssue}
+            disabled={busy || !canIssue || !quote.tradeId}
           >
             서명하고 발주서 발행
             <span className="text-[10px] font-normal text-blue-100">

@@ -47,6 +47,11 @@ export const QUOTE_SCREEN_MAP: Record<
       editable: false,
       showSignature: false,
     },
+    INVOICE_COMPLETED: {
+      title: '거래 완료',
+      editable: false,
+      showSignature: false,
+    },
   },
   CLIENT: {
     ISSUED: {
@@ -77,6 +82,11 @@ export const QUOTE_SCREEN_MAP: Record<
     },
     INVOICE_ISSUED: {
       title: '인보이스 수신',
+      editable: false,
+      showSignature: false,
+    },
+    INVOICE_COMPLETED: {
+      title: '거래 완료',
       editable: false,
       showSignature: false,
     },

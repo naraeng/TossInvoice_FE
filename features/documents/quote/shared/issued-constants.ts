@@ -18,7 +18,7 @@ export const TRANSACTION_STEPS = [
   {
     key: 'INVOICE',
     label: '최종 invoice',
-    statuses: ['PO_CONFIRMED', 'INVOICE_ISSUED'] as QuoteStatus[],
+    statuses: ['PO_CONFIRMED', 'INVOICE_ISSUED', 'INVOICE_COMPLETED'] as QuoteStatus[],
     supplierSub: '납품 완료 후 발행',
     clientSub: '납품 완료 후 발행',
   },

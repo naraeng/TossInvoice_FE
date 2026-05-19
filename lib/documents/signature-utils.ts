@@ -31,6 +31,11 @@ export function getInvoiceSupplierSignature(quote: QuoteDocument) {
   return findSignature(quote, 'SUPPLIER', 'INVOICE');
 }
 
+export function getInvoiceClientSignature(quote: QuoteDocument) {
+  return findSignature(quote, 'CLIENT', 'INVOICE');
+}
+
+
 export function upsertSignature(
   signatures: SignatureRecord[],
   next: SignatureRecord

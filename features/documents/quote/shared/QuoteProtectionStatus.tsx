@@ -1,4 +1,4 @@
-import { Check, Shield } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 import { PROTECTION_STATUS_ITEMS } from './issued-constants';
 
@@ -6,8 +6,7 @@ export function QuoteProtectionStatus() {
   return (
     <div>
       <div className="flex items-center gap-1.5">
-        <Shield className="size-4 text-rose-500" strokeWidth={2.5} />
-        <p className="text-sm font-bold text-slate-800">보호 상태</p>
+        <p className="text-sm font-bold text-slate-800">🛡 보호 상태</p>
       </div>
       <ul className="mt-3 space-y-2">
         {PROTECTION_STATUS_ITEMS.map((item) => (

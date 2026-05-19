@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { QuoteDetailContainer } from '@/features/documents/quote/QuoteDetailContainer';
-import { getViewerRole } from '@/lib/documents/get-viewer-role';
+import { getViewerRole, parseViewerRoleParam } from '@/lib/documents/get-viewer-role';
 import { resolveCurrentCompanyClient } from '@/lib/documents/resolve-current-company-client';
 import type { QuoteDocument, UserRole } from '@/types/documents/document';
 
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function QuoteDetailPageClient({ quote }: Props) {
+  const searchParams = useSearchParams();
   const [viewerRole, setViewerRole] = useState<UserRole | null>(null);
   const [denied, setDenied] = useState(false);
 
@@ -20,11 +22,32 @@ export function QuoteDetailPageClient({ quote }: Props) {
     let cancelled = false;
 
     void (async () => {
+      const fromUrl = parseViewerRoleParam(searchParams.get('viewer'));
+      if (quote.viewerRoleHint) {
+        if (!cancelled) {
+          setViewerRole(quote.viewerRoleHint);
+          setDenied(false);
+        }
+        return;
+      }
+
+      if (fromUrl) {
+        if (!cancelled) {
+          setViewerRole(fromUrl);
+          setDenied(false);
+        }
+        return;
+      }
+
       try {
         const company = await resolveCurrentCompanyClient();
-        getViewerRole(company.companyId, quote);
+        const role = getViewerRole(company.companyId, quote, {
+          userId: company.userId,
+          businessNumber: company.businessNumber,
+          companyName: company.companyName,
+        });
         if (!cancelled) {
-          setViewerRole(company.role);
+          setViewerRole(role);
           setDenied(false);
         }
       } catch {
@@ -37,7 +60,7 @@ export function QuoteDetailPageClient({ quote }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [quote]);
+  }, [quote, searchParams]);
 
   if (denied) {
     return (

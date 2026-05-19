@@ -10,7 +10,8 @@ export type QuoteStatus =
   | 'PO_DRAFT'        // 발주처 PO 작성중
   | 'PO_ISSUED'       // 발주서 발행 완료
   | 'PO_CONFIRMED'    // 양측 서명 완료
-  | 'INVOICE_ISSUED'; // 최종 인보이스
+  | 'INVOICE_ISSUED'  // 최종 인보이스 (발주처 수령·서명 대기)
+  | 'INVOICE_COMPLETED'; // 거래 완료 · 양측 보관용 invoice
 
 export type QuoteAction =
   | 'ISSUE_QUOTE' // 견적서 발행
@@ -63,6 +64,8 @@ export interface QuoteDocument {
   id: string;
   /** POST /api/v1/trades 성공 시 생성된 거래 ID */
   tradeId?: number;
+  /** 거래보기(GET /trades/{id}) 시 탭 역할로 확정한 화면 역할 */
+  viewerRoleHint?: UserRole;
   documentNo: string;
   status: QuoteStatus;
   issuedAt: string;
@@ -110,6 +113,10 @@ export interface QuoteDocument {
   estimatedArrival?: string;
   /** 물건 도착 확인 시각 (발주처) */
   arrivalConfirmedAt?: string;
+  /** 선금 입금 완료 시각 */
+  depositPaidAt?: string;
+  /** 잔금 송금 완료 시각 */
+  balancePaidAt?: string;
 }
 
 export interface QuoteScreenProps {

@@ -10,6 +10,8 @@ type Props = {
   trackingNumber: string;
   onTrackingNumberChange?: (value: string) => void;
   readOnly?: boolean;
+  /** 거래 완료(납품 확정) */
+  delivered?: boolean;
 };
 
 function formatShipmentDate(iso?: string) {
@@ -25,6 +27,7 @@ export function InvoiceShippingSection({
   trackingNumber,
   onTrackingNumberChange,
   readOnly = false,
+  delivered = false,
 }: Props) {
   const courier = quote.courier ?? 'CJ대한통운';
 
@@ -34,12 +37,14 @@ export function InvoiceShippingSection({
         <p className="text-sm font-bold text-[#191919]">📦 배송·납품</p>
         <span
           className={
-            readOnly
-              ? 'rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100'
-              : 'rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-100'
+            delivered
+              ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100'
+              : readOnly
+                ? 'rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100'
+                : 'rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-100'
           }
         >
-          {readOnly ? '배송 중' : '배송 전'}
+          {delivered ? '납품 완료' : readOnly ? '배송 중' : '배송 전'}
         </span>
       </div>
 

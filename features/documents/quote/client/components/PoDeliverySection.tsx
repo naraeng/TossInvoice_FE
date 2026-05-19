@@ -108,9 +108,7 @@ export function PoDeliverySection({
 
         <div>
           <p className="mb-2 text-xs font-semibold text-slate-800">배송 주소 *</p>
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <ShippingAddressField value={shippingAddress} onChange={onShippingAddressChange} />
-          </div>
+          <ShippingAddressField value={shippingAddress} onChange={onShippingAddressChange} />
         </div>
       </div>
     </section>

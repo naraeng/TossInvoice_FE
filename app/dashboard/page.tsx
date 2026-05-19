@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { apiClient } from '@/lib/api';
 import PageContainer from '@/components/layout/PageContainer';
 import DashboardHeader from '@/features/dashboard/DashboardHeader';
 import DashboardTransactions from '@/features/dashboard/DashboardTransactions';
 import MonthlyGraph from '@/features/dashboard/MonthlyGraph';
 import NoticeList from '@/features/dashboard/NoticeList';
-import { fetchMyTrades } from '@/lib/trades/fetch-trades';
-import { fetchMe } from '@/lib/users/fetch-me';
 import { saveMemberProfile } from '@/lib/auth-user';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
 import type { TransactionRow } from '@/features/dashboard/TransactionTableCard';

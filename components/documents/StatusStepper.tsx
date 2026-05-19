@@ -23,6 +23,7 @@ const ORDER: QuoteStatus[] = [
   'PO_ISSUED',
   'PO_CONFIRMED',
   'INVOICE_ISSUED',
+  'INVOICE_COMPLETED',
 ];
 
 function stepIndex(status: QuoteStatus) {
