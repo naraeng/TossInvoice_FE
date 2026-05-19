@@ -11,14 +11,14 @@ export type InfoSummaryCardProps = {
 
 export default function InfoSummaryCard({
   className,
-  companyName = '(주)대농 원두',
-  businessRegNo = '123-45-67890',
-  representativeName = '박대농',
+  companyName,
+  businessRegNo,
+  representativeName,
 }: InfoSummaryCardProps) {
   const rows = [
-    { label: '회사명', value: companyName },
-    { label: '사업자번호', value: businessRegNo },
-    { label: '대표자', value: representativeName },
+    { label: '회사명', value: companyName || '-' },
+    { label: '사업자번호', value: businessRegNo || '-' },
+    { label: '대표자', value: representativeName || '-' },
   ] as const;
 
   return (

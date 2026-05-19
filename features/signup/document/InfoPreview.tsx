@@ -1,31 +1,40 @@
 import { Check, Sparkles } from 'lucide-react';
 
 import type { OcrGateStatus } from './VerifyForm';
-
-/** 백엔드 OCR 연동 전 목업 데이터 (일치 시에만 표시) */
-const MOCK_FIELDS: { label: string; value: string; hint?: string }[] = [
-  { label: '회사명', value: '(주)대농 원두' },
-  { label: '사업자등록번호', value: '123-45-67890' },
-  { label: '대표자명', value: '박대농' },
-  {
-    label: '과세 유형',
-    value: '법인 / 일반 과세자 - 세금계산서 발행 가능',
-  },
-  { label: '사업장 주소', value: '서울특별시 강남구 테헤란로 123' },
-  { label: '은행 / 계좌', value: '신한은행 110-***-****81' },
-  {
-    label: '예금주',
-    value: '(주)대농 원두',
-    hint: '사업자명 일치',
-  },
-  { label: '업종', value: '제조 및 제조업' },
-];
+import { useSignupDocumentFiles } from '@/features/signup/SignupDocumentFilesProvider';
 
 export type InfoPreviewProps = {
   ocrGateStatus: OcrGateStatus;
 };
 
 export default function InfoPreview({ ocrGateStatus }: InfoPreviewProps) {
+  const { ocrExtracted } = useSignupDocumentFiles();
+  const rows = ocrExtracted
+    ? [
+        { label: '회사명', value: ocrExtracted.companyName },
+        { label: '사업자등록번호', value: ocrExtracted.businessNumber },
+        { label: '대표자명', value: ocrExtracted.ceoName },
+        {
+          label: '과세 유형',
+          value:
+            ocrExtracted.companyType === 'CORPORATE'
+              ? '법인/일반 과세자 - 세금계산서 발행 가능'
+              : '개인/일반 과세자 - 세금계산서 발행 가능',
+        },
+        { label: '사업장 주소', value: ocrExtracted.address },
+        {
+          label: '은행 / 계좌',
+          value: `${ocrExtracted.bank} ${ocrExtracted.account}`,
+        },
+        {
+          label: '예금주',
+          value: ocrExtracted.accountHolder,
+          hint: ocrExtracted.isNameMatched ? '사업자명/대표자명 일치' : undefined,
+        },
+        { label: '업종', value: ocrExtracted.businessType },
+      ]
+    : [];
+
   return (
     <section className="w-full">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -47,10 +56,15 @@ export default function InfoPreview({ ocrGateStatus }: InfoPreviewProps) {
       </div>
 
       {ocrGateStatus === 'matched' ? (
+        rows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
+            <p className="text-sm font-medium text-slate-500">추출 정보를 불러오는 중입니다…</p>
+          </div>
+        ) : (
         <>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <ul className="divide-y divide-slate-100">
-              {MOCK_FIELDS.map((row) => (
+              {rows.map((row) => (
                 <li
                   key={row.label}
                   className="flex items-start justify-between gap-3 px-4 py-3.5 sm:px-5"
@@ -81,6 +95,7 @@ export default function InfoPreview({ ocrGateStatus }: InfoPreviewProps) {
             OCR 추출 정보는 편집할 수 없습니다 · 변경하려면 서류를 다시 올려주세요
           </p>
         </>
+        )
       ) : ocrGateStatus === 'mismatched' ? (
         <div className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-5 sm:px-5">
           <p className="text-sm font-semibold text-red-900">
@@ -95,7 +110,7 @@ export default function InfoPreview({ ocrGateStatus }: InfoPreviewProps) {
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center sm:px-6">
           <p className="text-sm font-medium text-slate-600">서류를 모두 업로드해 주세요</p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            사업자등록증과 통장사본의 상호(예금주)가 같으면 여기에 OCR 추출 정보가 표시됩니다.
+            사업자등록증의 상호 또는 대표자명이 통장사본 예금주와 같으면 OCR 추출 정보가 표시됩니다.
           </p>
         </div>
       )}

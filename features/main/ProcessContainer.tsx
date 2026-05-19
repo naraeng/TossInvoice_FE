@@ -12,7 +12,7 @@ export default function ProcessContainer() {
     },
     {
       step: '03',
-      title: '안전결제로 거래',
+      title: '안전거래로 거래',
       description: '발주 -> 검증 -> 조건부 송금까지\n모두 시스템 안에서 진행.\n계좌번호는 어디에도 노출되지 않습니다.',
     },
   ];

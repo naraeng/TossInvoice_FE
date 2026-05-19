@@ -1,10 +1,15 @@
 'use client';
 
 import { Check, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useSignupDocumentFiles } from '@/features/signup/SignupDocumentFilesProvider';
+import { storeAuthTokens } from '@/lib/auth-storage';
+import { saveMemberProfile } from '@/lib/auth-user';
+import { apiClient } from '@/lib/api';
 
 function isValidEmail(s: string): boolean {
   const t = s.trim();
@@ -23,6 +28,13 @@ function isValidPassword(s: string): boolean {
   const hasDigit = /\d/.test(s);
   const hasSpecial = /[^A-Za-z0-9]/.test(s);
   return hasLetter && hasDigit && hasSpecial;
+}
+
+function normalizeCompanyType(value: unknown): 'CORPORATE' | 'INDIVIDUAL' {
+  if (value === 'CORPORATE') return 'CORPORATE';
+  // Backward compatibility: older OCR state used PERSONAL.
+  if (value === 'PERSONAL') return 'INDIVIDUAL';
+  return 'INDIVIDUAL';
 }
 
 type FieldStatus = 'empty' | 'ok' | 'bad';
@@ -61,14 +73,26 @@ function FieldStatusIcon({ status }: { status: FieldStatus }) {
 
 export type LoginInfoFormProps = {
   className?: string;
+  requiredTermsAgreed?: boolean;
+  formId?: string;
+  onSubmitStateChange?: (state: { canSubmit: boolean; isSubmitting: boolean }) => void;
 };
 
 /** 이메일·휴대폰·비밀번호 입력 (`document/VerifyForm`과 같이 폴더로 구분) */
-export default function LoginInfoForm({ className }: LoginInfoFormProps) {
+export default function LoginInfoForm({
+  className,
+  requiredTermsAgreed = false,
+  formId = 'signup-account-form',
+  onSubmitStateChange,
+}: LoginInfoFormProps) {
+  const router = useRouter();
+  const { ocrExtracted, setSubmittedSignup } = useSignupDocumentFiles();
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const emailOk = isValidEmail(email);
   const phoneOk = isValidKrPhone(phone);
@@ -80,11 +104,130 @@ export default function LoginInfoForm({ className }: LoginInfoFormProps) {
   const phoneS = fieldStatusText(phone, phoneOk);
   const passwordS = fieldStatusPassword(password, passwordOk);
   const confirmS = fieldStatusPassword(confirmPassword, confirmOk);
+  const canSubmit =
+    Boolean(ocrExtracted?.isNameMatched) &&
+    requiredTermsAgreed &&
+    emailOk &&
+    phoneOk &&
+    passwordOk &&
+    confirmOk &&
+    !isSubmitting;
+
+  useEffect(() => {
+    onSubmitStateChange?.({ canSubmit, isSubmitting });
+  }, [canSubmit, isSubmitting, onSubmitStateChange]);
 
   const inputIconPad = 'h-11 rounded-xl pr-10 placeholder:text-slate-400';
 
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!ocrExtracted?.isNameMatched) {
+      setSubmitError('서류 OCR 확인이 완료되지 않았습니다. 업로드 단계에서 먼저 확인해 주세요.');
+      return;
+    }
+    if (!requiredTermsAgreed) {
+      setSubmitError('필수 약관 동의 후 가입할 수 있어요.');
+      return;
+    }
+    if (!emailOk || !phoneOk || !passwordOk || !confirmOk) {
+      setSubmitError('입력값을 다시 확인해 주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const companyType = normalizeCompanyType(
+        (ocrExtracted as { companyType?: unknown } | null)?.companyType,
+      );
+      const res = await apiClient.post('/api/v1/auth/signup', {
+          companyName: ocrExtracted.companyName,
+          businessType: ocrExtracted.businessType,
+          businessNumber: ocrExtracted.businessNumber,
+          ceoName: ocrExtracted.ceoName,
+          bank: ocrExtracted.bank,
+          account: ocrExtracted.account,
+          email: email.trim(),
+          password,
+          address: ocrExtracted.address,
+          phone,
+          companyType,
+      });
+      if (res.status === 201) {
+        try {
+          const loginRes = await apiClient.post('/api/v1/auth/login', {
+            email: email.trim(),
+            password,
+          });
+          const loginData = loginRes.data as {
+            result?: { accessToken?: string };
+          };
+          const accessToken = loginData?.result?.accessToken;
+          if (accessToken) {
+            storeAuthTokens({
+              accessToken,
+              rememberLogin: true,
+            });
+            saveMemberProfile(
+              {
+                email: email.trim(),
+                phone,
+                companyName: ocrExtracted.companyName,
+                businessNumber: ocrExtracted.businessNumber,
+                ceoName: ocrExtracted.ceoName,
+                companyType: companyType === 'CORPORATE' ? '법인' : '개인',
+                address: ocrExtracted.address,
+                bank: ocrExtracted.bank,
+                account: ocrExtracted.account,
+                accountHolder: ocrExtracted.accountHolder,
+                businessType: ocrExtracted.businessType,
+              },
+              true,
+            );
+          }
+        } catch {
+          // Ignore auto-login failure; signup itself already succeeded.
+        }
+
+        setSubmittedSignup({
+          companyName: ocrExtracted.companyName,
+          businessNumber: ocrExtracted.businessNumber,
+          ceoName: ocrExtracted.ceoName,
+          email: email.trim(),
+          phone,
+        });
+        router.push('/signup/complete');
+        return;
+      }
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error && 'response' in error) {
+        const response = (
+          error as {
+            response?: {
+              data?: { errorCode?: string; message?: string };
+            };
+          }
+        ).response;
+        const code = response?.data?.errorCode;
+        if (code === 'AUTH_001') {
+          setSubmitError('이미 사용 중인 이메일입니다.');
+        } else if (code === 'AUTH_002') {
+          setSubmitError('이미 등록된 사업자번호입니다.');
+        } else if (code === 'REQUEST_001') {
+          setSubmitError(response?.data?.message ?? '요청 형식이 올바르지 않습니다.');
+        } else {
+          setSubmitError(response?.data?.message ?? '회원가입 처리 중 오류가 발생했습니다.');
+        }
+      } else {
+        setSubmitError('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <section className={cn('min-w-0 space-y-6', className)}>
+    <form id={formId} className={cn('min-w-0 space-y-6', className)} onSubmit={onSubmit}>
       <div>
         <h2 className="text-lg font-bold text-slate-900">로그인 정보</h2>
         <p className="mt-1 text-sm text-slate-500">가입 후에도 이메일로 로그인할 수 있어요.</p>
@@ -159,6 +302,10 @@ export default function LoginInfoForm({ className }: LoginInfoFormProps) {
           </div>
         </label>
       </div>
-    </section>
+      {submitError ? <p className="text-sm font-semibold text-red-600">{submitError}</p> : null}
+      {!requiredTermsAgreed ? (
+        <p className="text-xs text-slate-400">필수 약관 동의 후 가입 버튼이 활성화됩니다.</p>
+      ) : null}
+    </form>
   );
 }
