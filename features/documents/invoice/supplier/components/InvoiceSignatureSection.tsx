@@ -25,8 +25,7 @@ export function InvoiceSignatureSection({
   onSignatureChange,
 }: Props) {
   const invoiceSig = getInvoiceSupplierSignature(quote);
-  const supplierRep =
-    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+  const supplierRep = quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
   const clientRep = quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
   const supplierSigned = issued || !!hasInvoiceSignature;
 
