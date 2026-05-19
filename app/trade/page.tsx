@@ -8,60 +8,73 @@ import PageContainer from '@/components/layout/PageContainer';
 import TradeBoard from '@/features/trade/TradeBoard';
 import TradeHeader from '@/features/trade/TradeHeader';
 import { apiClient } from '@/lib/api';
-import type {
-  TradeApiRow,
-  TradePageResponse,
-  TradePhase,
-  TradeRole,
-} from '@/features/trade/types';
-
-type TradeResponse = {
-  result?: TradePageResponse | null;
-};
+import type { TradeApiRow, TradePageResponse, TradePhase, TradeRole } from '@/features/trade/types';
 
 const PAGE_SIZE = 5;
 
-function TradePageInner() {
+type TradesApiResponse = {
+  errorCode: string | null;
+  message: string;
+  result: TradePageResponse | null;
+};
+
+function TradePageContent() {
   const searchParams = useSearchParams();
   const initialRole: TradeRole = searchParams.get('tab') === 'purchase' ? 'BUYER' : 'SELLER';
 
   const [activeRole, setActiveRole] = useState<TradeRole>(initialRole);
   const [activePhase, setActivePhase] = useState<TradePhase>('ACTIVE');
   const [currentPage, setCurrentPage] = useState(1);
-
   const [trades, setTrades] = useState<TradeApiRow[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [totalPartners, setTotalPartners] = useState(0);
   const [activePartners, setActivePartners] = useState(0);
   const [newPartnersThisMonth, setNewPartnersThisMonth] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchTrades = useCallback(
-    async (role: TradeRole, phase: TradePhase, page: number) => {
-      setLoading(true);
-      try {
-        const tradesRes = await apiClient.get(
-          `/api/v1/trades?role=${role}&phase=${phase}&page=${page}&size=${PAGE_SIZE}`,
-        );
-        const pageData = (tradesRes.data as TradeResponse).result;
-        setTrades(pageData?.trades ?? []);
-        setCurrentPage(pageData?.currentPage ?? page);
-        setTotalPages(pageData?.totalPages ?? 1);
-        setTotalPartners(pageData?.totalPartners ?? 0);
-        setActivePartners(pageData?.activePartners ?? 0);
-        setNewPartnersThisMonth(pageData?.newPartnersThisMonth ?? 0);
-      } catch {
-        setTrades([]);
-      } finally {
-        setLoading(false);
+  const fetchTrades = useCallback(async (role: TradeRole, phase: TradePhase, page: number) => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await apiClient.get<TradesApiResponse>('/api/v1/trades', {
+        params: { role, phase, page, size: PAGE_SIZE },
+      });
+
+      const pageData = res.data.result;
+      if (!pageData && res.data.errorCode && res.data.errorCode !== 'SUCCESS') {
+        throw new Error(res.data.message || '거래 목록을 불러오지 못했습니다.');
       }
-    },
-    [],
-  );
 
-  // role/phase/page 변경 시 재호출
+      setTrades(pageData?.trades ?? []);
+      setCurrentPage(pageData?.currentPage ?? page);
+      setTotalPages(Math.max(1, pageData?.totalPages ?? 1));
+      setTotalPartners(pageData?.totalPartners ?? 0);
+      setActivePartners(pageData?.activePartners ?? 0);
+      setNewPartnersThisMonth(pageData?.newPartnersThisMonth ?? 0);
+    } catch (error: unknown) {
+      setTrades([]);
+      const message =
+        typeof error === 'object' &&
+        error &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { message?: string } } }).response?.data?.message ===
+          'string'
+          ? (error as { response: { data: { message: string } } }).response.data.message
+          : error instanceof Error
+            ? error.message
+            : '거래 목록을 불러오지 못했습니다.';
+      setLoadError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchTrades(activeRole, activePhase, currentPage);
+    const fetchData = async () => {
+      await fetchTrades(activeRole, activePhase, currentPage);
+    };
+    void fetchData();
   }, [fetchTrades, activeRole, activePhase, currentPage]);
 
   const handleRoleChange = (role: TradeRole) => {
@@ -89,6 +102,13 @@ function TradePageInner() {
           activePartners={activePartners}
           newPartnersThisMonth={newPartnersThisMonth}
         />
+
+        {loadError && (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {loadError}
+          </p>
+        )}
+
         <TradeBoard
           trades={trades}
           activeRole={activeRole}
@@ -98,7 +118,6 @@ function TradePageInner() {
           loading={loading}
         />
 
-        {/* 페이지네이션 */}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-1 pt-2">
             <button
@@ -145,8 +164,14 @@ function TradePageInner() {
 
 export default function TradePage() {
   return (
-    <Suspense>
-      <TradePageInner />
+    <Suspense
+      fallback={
+        <PageContainer className="py-8">
+          <p className="text-sm text-slate-500">거래 목록을 불러오는 중…</p>
+        </PageContainer>
+      }
+    >
+      <TradePageContent />
     </Suspense>
   );
 }

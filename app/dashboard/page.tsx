@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { apiClient } from '@/lib/api';
 import PageContainer from '@/components/layout/PageContainer';
 import DashboardHeader from '@/features/dashboard/DashboardHeader';
 import DashboardTransactions from '@/features/dashboard/DashboardTransactions';
 import MonthlyGraph from '@/features/dashboard/MonthlyGraph';
 import NoticeList from '@/features/dashboard/NoticeList';
-import { apiClient } from '@/lib/api';
 import { saveMemberProfile } from '@/lib/auth-user';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
 import type { TransactionRow } from '@/features/dashboard/TransactionTableCard';
@@ -23,7 +23,7 @@ type MyInfoResponse = {
 };
 
 export type MonthlyTrendItem = {
-  month: string;        // "YYYY-MM"
+  month: string; // "YYYY-MM"
   sellingAmount: number;
   buyingAmount: number;
 };
@@ -32,7 +32,12 @@ type DashboardHomeResponse = {
   result?: {
     todayActiveCount?: number;
     sellingInProgress?: { total?: number; awaitingCounterSign?: number };
-    buyingInProgress?: { total?: number; poInProgress?: number; deliveryWaiting?: number; inspectionWaiting?: number };
+    buyingInProgress?: {
+      total?: number;
+      poInProgress?: number;
+      deliveryWaiting?: number;
+      inspectionWaiting?: number;
+    };
     paymentWaiting?: { amount?: number; depositCount?: number; balanceCount?: number };
     thisMonthBuyAmount?: { amount?: number; deltaPercent?: number; direction?: string };
     monthlyTrend?: MonthlyTrendItem[];
@@ -41,12 +46,18 @@ type DashboardHomeResponse = {
 
 function statusToProgressStep(status: string): number {
   switch (status) {
-    case 'PENDING_PO': return 0;
-    case 'PENDING_SELLER_SIGN': return 1;
-    case 'PENDING_INVOICE': return 2;
-    case 'PENDING_BUYER_CONFIRM': return 3;
-    case 'COMPLETED': return 4;
-    default: return 0;
+    case 'PENDING_PO':
+      return 0;
+    case 'PENDING_SELLER_SIGN':
+      return 1;
+    case 'PENDING_INVOICE':
+      return 2;
+    case 'PENDING_BUYER_CONFIRM':
+      return 3;
+    case 'COMPLETED':
+      return 4;
+    default:
+      return 0;
   }
 }
 
@@ -93,9 +104,7 @@ export default function DashboardPage() {
         setCompanyName(company);
         setCeoName(ceo);
         setInProgressCount(home?.todayActiveCount ?? 0);
-        setPendingCount(
-          (selling?.awaitingCounterSign ?? 0) + (buying?.inspectionWaiting ?? 0),
-        );
+        setPendingCount((selling?.awaitingCounterSign ?? 0) + (buying?.inspectionWaiting ?? 0));
         setPendingPaymentAmount(home?.paymentWaiting?.amount ?? 0);
         setMonthlyNetAmount(home?.thisMonthBuyAmount?.amount ?? 0);
         setMonthlyTrend(home?.monthlyTrend ?? []);
@@ -107,7 +116,9 @@ export default function DashboardPage() {
         if (cancelled) return;
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── 거래 테이블 rows (미리보기 5건) ────────────────────────────────────────
@@ -122,7 +133,7 @@ export default function DashboardPage() {
           progressStep: statusToProgressStep(t.status),
           cancelled: t.status === 'CANCELLED',
         })),
-    [trades],
+    [trades]
   );
 
   const purchaseRows = useMemo<TransactionRow[]>(
@@ -136,7 +147,7 @@ export default function DashboardPage() {
           progressStep: statusToProgressStep(t.status),
           cancelled: t.status === 'CANCELLED',
         })),
-    [trades],
+    [trades]
   );
 
   return (

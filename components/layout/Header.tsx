@@ -16,7 +16,9 @@ export default function Header() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
-    setLoggedIn(isLoggedIn());
+    void (async () => {
+      setLoggedIn(await isLoggedIn());
+    })();
   }, []);
 
   const onLogout = async () => {
@@ -36,18 +38,18 @@ export default function Header() {
       <BrandLogo href="/" priority />
 
       <nav className="hidden items-center gap-10 text-sm font-semibold text-slate-500 md:ml-12 md:flex">
-        <a className="transition hover:text-slate-900" href="/#service">
+        <Link className="transition hover:text-slate-900" href="/#service">
           서비스 소개
-        </a>
-        <a className="transition hover:text-slate-900" href="/#reason">
+        </Link>
+        <Link className="transition hover:text-slate-900" href="/#reason">
           왜 필요한가요?
-        </a>
-        <a className="transition hover:text-slate-900" href="/#compare">
+        </Link>
+        <Link className="transition hover:text-slate-900" href="/#compare">
           기존 방식과 비교
-        </a>
-        <a className="transition hover:text-slate-900" href="/#process">
+        </Link>
+        <Link className="transition hover:text-slate-900" href="/#process">
           이용 방법
-        </a>
+        </Link>
       </nav>
 
       <div className="ml-auto flex items-center justify-end gap-3 pl-2">
@@ -69,10 +71,7 @@ export default function Header() {
             >
               <Link href="/signup">회원가입</Link>
             </Button>
-            <Button
-              asChild
-              className="h-9 rounded-lg px-4 text-sm font-semibold"
-            >
+            <Button asChild className="h-9 rounded-lg px-4 text-sm font-semibold">
               <Link href="/login">로그인</Link>
             </Button>
           </>
