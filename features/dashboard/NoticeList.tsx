@@ -1,43 +1,72 @@
+'use client';
+
+import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+
+import { type NoticeIcon } from '@/lib/notices';
+import { useNotifications } from '@/lib/use-notifications';
+
+function NoticeIconBadge({ icon }: { icon: NoticeIcon }) {
+  const base = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full';
+  const iconDim = 'h-4 w-4';
+  if (icon === 'alert')
+    return (
+      <div className={`${base} bg-red-100 text-red-500`}>
+        <AlertCircle className={iconDim} />
+      </div>
+    );
+  if (icon === 'check')
+    return (
+      <div className={`${base} bg-emerald-100 text-emerald-600`}>
+        <CheckCircle2 className={iconDim} />
+      </div>
+    );
+  return (
+    <div className={`${base} bg-slate-100 text-slate-500`}>
+      <Info className={iconDim} />
+    </div>
+  );
+}
+
 export default function NoticeList() {
-  const notices = [
-    {
-      title: '거래처 계좌 변경 감지',
-      description: '(주)수민유통 · 신한 110-****-***81 -> 우리 1002-***-**45',
-      time: '2분전',
-      color: 'bg-red-500',
-      box: 'bg-red-50 text-red-500',
-    },
-    {
-      title: '결제 승인 대기',
-      description: 'PO-240511-002 · 준플라워 · 950,000원',
-      time: '1시간전',
-      color: 'bg-amber-500',
-      box: 'bg-amber-50 text-amber-500',
-    },
-  ];
+  const { notices, loading } = useNotifications();
+  const preview = notices.slice(0, 5);
 
   return (
-    <section className="h-full rounded-3xl border-2 border-blue-500 bg-white p-5">
-      <div className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600">
-        🔔 실시간 알림
+    <section className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-4">
+        <h2 className="text-base font-bold text-slate-900">알림</h2>
       </div>
-      <h2 className="mt-5 text-lg font-bold text-slate-900">확인 필요한 알림 2건</h2>
 
-      <div className="mt-4 space-y-3">
-        {notices.map((notice) => (
-          <article key={notice.title} className={`flex gap-4 rounded-2xl px-4 py-4 ${notice.box}`}>
-            <div className={`mt-1 h-9 w-1.5 flex-shrink-0 rounded-full ${notice.color}`} />
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-bold">{notice.title}</h3>
-              <p className="mt-1 truncate text-xs font-medium text-slate-600">
-                {notice.description}
-              </p>
-            </div>
-            <span className="self-end whitespace-nowrap text-xs font-medium text-slate-400">
-              {notice.time}
-            </span>
-          </article>
-        ))}
+      <ul className="flex-1 divide-y divide-slate-50 overflow-y-auto">
+        {loading ? (
+          <li className="px-5 py-6 text-center text-sm text-slate-400">불러오는 중...</li>
+        ) : preview.length === 0 ? (
+          <li className="px-5 py-6 text-center text-sm text-slate-400">새 알림이 없습니다.</li>
+        ) : (
+          preview.map((n) => (
+            <li
+              key={n.id}
+              className="flex items-start gap-3 px-5 py-4 transition hover:bg-slate-50"
+            >
+              <NoticeIconBadge icon={n.icon} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900">{n.title}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-400">{n.desc}</p>
+              </div>
+              <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-300">{n.time}</span>
+            </li>
+          ))
+        )}
+      </ul>
+
+      <div className="border-t border-slate-100 px-5 py-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-notifications'))}
+          className="w-full cursor-pointer text-center text-xs font-semibold text-blue-600 hover:text-blue-700"
+        >
+          전체 알림 보기
+        </button>
       </div>
     </section>
   );

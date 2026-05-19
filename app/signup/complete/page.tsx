@@ -1,6 +1,10 @@
+'use client';
+
+import PageContainer from '@/components/layout/PageContainer';
 import InfoSummaryCard from '@/features/signup/complete/InfoSummaryCard';
 import SuccessHero from '@/features/signup/complete/SuccessHero';
 import type { SignupStep } from '@/features/signup/document/StepHeader';
+import { useSignupDocumentFiles } from '@/features/signup/SignupDocumentFilesProvider';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 
@@ -71,14 +75,21 @@ function SignupCompleteStepper() {
 }
 
 export default function SignupCompletePage() {
+  const { submittedSignup } = useSignupDocumentFiles();
+
   return (
     <div className="min-h-[60vh] bg-slate-50 pb-16 pt-6 md:pt-8">
-      <div className="mx-auto w-full max-w-screen-xl px-6 md:px-10">
+      <PageContainer>
         <SignupCompleteStepper />
 
         <SuccessHero className="mt-2" />
-        <InfoSummaryCard className="mx-auto mt-10 max-w-3xl" />
-      </div>
+        <InfoSummaryCard
+          className="mx-auto mt-10 max-w-3xl"
+          companyName={submittedSignup?.companyName}
+          businessRegNo={submittedSignup?.businessNumber}
+          representativeName={submittedSignup?.ceoName}
+        />
+      </PageContainer>
     </div>
   );
 }

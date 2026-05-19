@@ -55,10 +55,11 @@ const TERM_SAMPLE_BODY: Record<TermId, string> = {
 
 export type TermsConsentFormProps = {
   className?: string;
+  onRequiredConsentChange?: (agreed: boolean) => void;
 };
 
 /** 약관 동의 체크 (`document/VerifyForm`과 같이 폴더로 구분) */
-export default function TermsConsentForm({ className }: TermsConsentFormProps) {
+export default function TermsConsentForm({ className, onRequiredConsentChange }: TermsConsentFormProps) {
   const [agreed, setAgreed] = useState<Record<string, boolean>>({});
   const [viewingId, setViewingId] = useState<TermId | null>(null);
   const dialogTitleId = useId();
@@ -75,6 +76,10 @@ export default function TermsConsentForm({ className }: TermsConsentFormProps) {
     });
     setAgreed(next);
   };
+
+  useEffect(() => {
+    onRequiredConsentChange?.(allRequiredChecked);
+  }, [allRequiredChecked, onRequiredConsentChange]);
 
   useEffect(() => {
     if (!viewingId) return;
@@ -120,7 +125,7 @@ export default function TermsConsentForm({ className }: TermsConsentFormProps) {
               <div className="border-t border-slate-100 px-5 py-4 sm:px-6">
                 <Button
                   type="button"
-                  className="w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700"
+                  className="w-full rounded-xl font-semibold"
                   onClick={() => setViewingId(null)}
                 >
                   확인

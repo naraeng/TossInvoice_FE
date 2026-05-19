@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -14,32 +15,77 @@ import { createPortal } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api';
 import { useSignupDocumentFiles } from '@/features/signup/SignupDocumentFilesProvider';
+import {
+  extractTextFromFile,
+  isNameIncludedInText,
+  isSameCompanyName,
+  parseBankbookText,
+  parseBusinessDocText,
+  toErrorMessage,
+} from '@/features/signup/document/ocr';
 
-/**
- * 백엔드 OCR·국세청 검증 전 목업.
- * 파일명에 wrong | fail | 불일치 | other 가 있으면 다른 상호로 간주합니다.
- */
 export type OcrGateStatus = 'idle' | 'matched' | 'mismatched';
+type NtsStatus = 'idle' | 'checking' | 'active' | 'inactive' | 'error';
 
-const MISMATCH_MARKERS = ['wrong', 'fail', '불일치', 'other'];
+function logOcrDebug(payload: {
+  businessText: string;
+  bankbookText: string;
+  business: {
+    companyName: string;
+    businessNumber: string;
+    ceoName: string;
+    businessType: string;
+    address: string;
+    companyType: 'CORPORATE' | 'INDIVIDUAL';
+  };
+  bankbook: {
+    bank: string;
+    account: string;
+    accountHolder: string;
+  };
+  isNameMatched: boolean;
+  status: OcrGateStatus;
+}) {
+  if (process.env.NODE_ENV === 'production') return;
+  const normalizePreview = (text: string) =>
+    text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 220);
 
-function mockExtractedCorporateName(file: File): string {
-  const lower = file.name.toLowerCase();
-  if (MISMATCH_MARKERS.some((m) => lower.includes(m))) {
-    return '(주)다른회사';
-  }
-  return '(주)대농 원두';
-}
+  console.groupCollapsed(
+    `[Signup OCR] ${payload.status.toUpperCase()} · matched=${payload.isNameMatched}`,
+  );
+  console.table([
+    { key: 'status', value: payload.status },
+    { key: 'isNameMatched', value: String(payload.isNameMatched) },
+  ]);
 
-function evaluateMockOcrMatch(
-  businessFile: File | null,
-  bankbookFile: File | null,
-): OcrGateStatus {
-  if (!businessFile || !bankbookFile) return 'idle';
-  const a = mockExtractedCorporateName(businessFile);
-  const b = mockExtractedCorporateName(bankbookFile);
-  return a === b ? 'matched' : 'mismatched';
+  console.groupCollapsed('사업자등록증 OCR');
+  console.table([
+    { field: 'companyName', value: payload.business.companyName || '(empty)' },
+    { field: 'businessNumber', value: payload.business.businessNumber || '(empty)' },
+    { field: 'ceoName', value: payload.business.ceoName || '(empty)' },
+    { field: 'address', value: payload.business.address || '(empty)' },
+    { field: 'businessType', value: payload.business.businessType || '(empty)' },
+    { field: 'companyType', value: payload.business.companyType || '(empty)' },
+  ]);
+  console.log('raw preview:', normalizePreview(payload.businessText));
+  console.log('raw full text:', payload.businessText);
+  console.groupEnd();
+
+  console.groupCollapsed('통장사본 OCR');
+  console.table([
+    { field: 'bank', value: payload.bankbook.bank || '(empty)' },
+    { field: 'account', value: payload.bankbook.account || '(empty)' },
+    { field: 'accountHolder', value: payload.bankbook.accountHolder || '(empty)' },
+  ]);
+  console.log('raw preview:', normalizePreview(payload.bankbookText));
+  console.log('raw full text:', payload.bankbookText);
+  console.groupEnd();
+  console.groupEnd();
 }
 
 /** 업로드 한도: 10MiB (1024 × 1024 × 10 바이트) */
@@ -90,22 +136,17 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
   const dialogTitleId = useId();
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const [failedPreviewKey, setFailedPreviewKey] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const currentFileKey = file ? `${file.name}-${file.size}-${file.lastModified}` : null;
+  const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
 
   useEffect(() => {
-    setPreviewFailed(false);
-    if (!file) {
-      setObjectUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setObjectUrl(url);
+    if (!objectUrl) return;
     return () => {
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
     };
-  }, [file]);
+  }, [objectUrl]);
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -189,7 +230,11 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
 
   const complete = Boolean(file);
   const showImageThumb =
-    complete && file && objectUrl && isImageFile(file) && !previewFailed;
+    complete &&
+    file &&
+    objectUrl &&
+    isImageFile(file) &&
+    failedPreviewKey !== currentFileKey;
   const canOpenPreview = Boolean(complete && file && objectUrl);
   const isPdf = Boolean(
     file &&
@@ -245,13 +290,13 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
                     src={objectUrl}
                     className="h-[min(78vh,720px)] w-full rounded-lg border border-slate-200 bg-white"
                   />
-                ) : isImageFile(file) && !previewFailed ? (
+                ) : isImageFile(file) && failedPreviewKey !== currentFileKey ? (
                   <div className="flex min-h-[min(78vh,720px)] items-center justify-center">
                     <img
                       src={objectUrl}
                       alt={`${title} 전체 미리보기`}
                       className="max-h-[min(78vh,720px)] w-full max-w-full object-contain"
-                      onError={() => setPreviewFailed(true)}
+                      onError={() => setFailedPreviewKey(currentFileKey)}
                     />
                   </div>
                 ) : (
@@ -291,14 +336,14 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
                 src={objectUrl!}
                 alt={`${title} 미리보기`}
                 className="mx-auto max-h-40 w-full object-contain sm:max-h-48"
-                onError={() => setPreviewFailed(true)}
+                onError={() => setFailedPreviewKey(currentFileKey)}
               />
             </div>
           ) : null}
 
           {complete && file && !showImageThumb ? (
             <div className="mb-3 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
-              {isImageFile(file) && previewFailed ? (
+              {isImageFile(file) && failedPreviewKey === currentFileKey ? (
                 <FileText className="h-7 w-7 opacity-95" aria-hidden />
               ) : (
                 <Check className="h-7 w-7 stroke-[2.5]" aria-hidden />
@@ -397,41 +442,233 @@ export type VerifyFormProps = {
   onOcrGateChange?: (status: OcrGateStatus) => void;
 };
 
-function NtsVerifySection() {
+function NtsVerifySection({
+  businessNumber,
+  ntsStatus,
+  ntsMessage,
+  onVerify,
+  disabled,
+}: {
+  businessNumber: string;
+  ntsStatus: NtsStatus;
+  ntsMessage: string | null;
+  onVerify: () => void;
+  disabled: boolean;
+}) {
+  const isChecking = ntsStatus === 'checking';
+  const isActive = ntsStatus === 'active';
+  const isInactive = ntsStatus === 'inactive';
+  const isError = ntsStatus === 'error';
+
+  const statusLabel = isActive
+    ? '정상 사업자(계속사업)로 확인되었습니다.'
+    : ntsMessage;
+
   return (
     <section className="mt-10 w-full border-t border-slate-100 pt-8">
-      <h2 className="text-lg font-bold text-slate-900">국세청 정보 확인하기</h2>
+      <h2 className="text-lg font-bold text-slate-900">2. 국세청 정보 확인하기</h2>
       <p className="mt-1 text-sm text-slate-500">사업장의 인증 상태를 확인해 주세요.</p>
+      <p className="mt-2 text-xs font-semibold text-slate-500">
+        조회 사업자번호: {businessNumber || '(OCR 추출 필요)'}
+      </p>
       <Button
         type="button"
-        disabled
-        title="국세청 연동 후 활성화됩니다"
-        variant="secondary"
-        className="mt-5 h-10 rounded-lg border border-slate-200 bg-slate-100 px-6 text-sm font-semibold text-slate-400"
+        disabled={disabled || isChecking}
+        title="OCR에서 사업자번호 추출 후 조회할 수 있습니다"
+        variant={isActive ? 'default' : 'secondary'}
+        className={cn(
+          'mt-5 h-10 rounded-lg px-6 text-sm font-semibold',
+          isActive
+            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+            : 'border border-slate-200 bg-slate-100 text-slate-700',
+        )}
+        onClick={onVerify}
       >
-        확인하기
+        {isChecking ? '국세청 조회 중...' : '확인하기'}
       </Button>
+      {statusLabel ? (
+        <p
+          className={cn(
+            'mt-3 text-sm font-medium',
+            isActive && 'text-emerald-700',
+            isInactive && 'text-amber-600',
+            isError && 'text-slate-500',
+            ntsStatus === 'idle' && 'text-slate-500',
+          )}
+        >
+          {statusLabel}
+        </p>
+      ) : null}
     </section>
   );
 }
 
 export default function VerifyForm({ onOcrGateChange }: VerifyFormProps) {
-  const { businessFile, setBusinessFile, bankbookFile, setBankbookFile } = useSignupDocumentFiles();
+  const {
+    businessFile,
+    setBusinessFile,
+    bankbookFile,
+    setBankbookFile,
+    ocrExtracted,
+    setOcrExtracted,
+  } = useSignupDocumentFiles();
   const [mismatchModalOpen, setMismatchModalOpen] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ntsStatus, setNtsStatus] = useState<NtsStatus>('idle');
+  const [ntsMessage, setNtsMessage] = useState<string | null>(null);
   const mismatchModalTitleId = useId();
+  const ocrRunIdRef = useRef(0);
   const prevOcrStatusRef = useRef<OcrGateStatus>('idle');
+  const [lastOcrStatus, setLastOcrStatus] = useState<OcrGateStatus>('idle');
 
-  useEffect(() => {
-    const status = evaluateMockOcrMatch(businessFile, bankbookFile);
-    onOcrGateChange?.(status);
-    if (status === 'mismatched' && prevOcrStatusRef.current !== 'mismatched') {
-      setMismatchModalOpen(true);
+  const runOcrPipeline = useCallback(
+    (nextBusinessFile: File | null, nextBankbookFile: File | null) => {
+      if (!nextBusinessFile || !nextBankbookFile) {
+        ocrRunIdRef.current += 1;
+        setOcrBusy(false);
+        setOcrError(null);
+        setMismatchModalOpen(false);
+        setNtsStatus('idle');
+        setNtsMessage(null);
+        setLastOcrStatus('idle');
+        setOcrExtracted(null);
+        onOcrGateChange?.('idle');
+        prevOcrStatusRef.current = 'idle';
+        return;
+      }
+
+      const runId = ocrRunIdRef.current + 1;
+      ocrRunIdRef.current = runId;
+      setOcrBusy(true);
+      setOcrError(null);
+      setNtsStatus('idle');
+      setNtsMessage(null);
+      onOcrGateChange?.('idle');
+
+      void (async () => {
+        try {
+          const [businessText, bankbookText] = await Promise.all([
+            extractTextFromFile(nextBusinessFile),
+            extractTextFromFile(nextBankbookFile),
+          ]);
+          if (ocrRunIdRef.current !== runId) return;
+
+          const business = parseBusinessDocText(businessText);
+          const bankbook = parseBankbookText(bankbookText);
+          const accountHolderOrRaw = bankbook.accountHolder || bankbookText;
+          const isNameMatched =
+            isSameCompanyName(business.companyName, accountHolderOrRaw) ||
+            isSameCompanyName(business.ceoName, accountHolderOrRaw) ||
+            isNameIncludedInText(business.companyName, bankbookText) ||
+            isNameIncludedInText(business.ceoName, bankbookText);
+          const status: OcrGateStatus = isNameMatched ? 'matched' : 'mismatched';
+          logOcrDebug({
+            businessText,
+            bankbookText,
+            business,
+            bankbook,
+            isNameMatched,
+            status,
+          });
+
+          setOcrExtracted({
+            companyName: business.companyName,
+            businessNumber: business.businessNumber,
+            ceoName: business.ceoName,
+            businessType: business.businessType,
+            address: business.address,
+            bank: bankbook.bank,
+            account: bankbook.account,
+            accountHolder: bankbook.accountHolder,
+            companyType: business.companyType,
+            isNameMatched,
+          });
+          setLastOcrStatus(status);
+          onOcrGateChange?.(status);
+          if (status === 'mismatched' && prevOcrStatusRef.current !== 'mismatched') {
+            setMismatchModalOpen(true);
+          } else {
+            setMismatchModalOpen(false);
+          }
+          prevOcrStatusRef.current = status;
+        } catch (error) {
+          if (ocrRunIdRef.current !== runId) return;
+          setOcrExtracted(null);
+          const reason = toErrorMessage(error);
+          setOcrError(`OCR 처리 중 오류가 발생했습니다. (${reason})`);
+          setLastOcrStatus('idle');
+          onOcrGateChange?.('idle');
+        } finally {
+          if (ocrRunIdRef.current === runId) {
+            setOcrBusy(false);
+          }
+        }
+      })();
+    },
+    [ntsStatus, onOcrGateChange, setOcrExtracted],
+  );
+
+  const handleNtsVerify = useCallback(async () => {
+    const businessNumber = (ocrExtracted?.businessNumber ?? '').replace(/\D/g, '');
+    if (businessNumber.length !== 10) {
+      setNtsStatus('error');
+      setNtsMessage('OCR에서 사업자등록번호(10자리)를 추출한 뒤 다시 시도해 주세요.');
+      onOcrGateChange?.('mismatched');
+      return;
     }
-    if (status === 'matched' || status === 'idle') {
-      setMismatchModalOpen(false);
+
+    setNtsStatus('checking');
+    setNtsMessage(null);
+    try {
+      const res = await apiClient.post('/api/v1/nts/status', {
+        businessNumber,
+      });
+      const data = res.data as {
+        success?: boolean;
+        businessStatus?: string;
+        taxType?: string;
+        endDate?: string;
+      };
+      const businessStatus = data.businessStatus ?? '';
+      const taxType = data.taxType ?? '';
+      const endDate = data.endDate ? ` / 폐업일: ${data.endDate}` : '';
+
+      if (data.success) {
+        setNtsStatus('active');
+        setNtsMessage(
+          `국세청 상태조회 결과: ${businessStatus || '계속사업자'}${taxType ? ` / ${taxType}` : ''}`,
+        );
+      } else {
+        setNtsStatus('inactive');
+        setNtsMessage(
+          `국세청 조회 결과 ${businessStatus || '비정상 사업자'} 상태입니다.${endDate}`,
+        );
+      }
+      onOcrGateChange?.(lastOcrStatus === 'matched' ? 'matched' : 'mismatched');
+    } catch (error) {
+      setNtsStatus('error');
+      const reason = toErrorMessage(error);
+      setNtsMessage(`국세청 상태 조회 실패: ${reason}`);
+      onOcrGateChange?.(lastOcrStatus === 'matched' ? 'matched' : 'mismatched');
     }
-    prevOcrStatusRef.current = status;
-  }, [businessFile, bankbookFile, onOcrGateChange]);
+  }, [lastOcrStatus, ocrExtracted?.businessNumber, onOcrGateChange]);
+
+  const handleBusinessFileChange = useCallback(
+    (next: File | null) => {
+      setBusinessFile(next);
+      runOcrPipeline(next, bankbookFile);
+    },
+    [bankbookFile, runOcrPipeline, setBusinessFile],
+  );
+
+  const handleBankbookFileChange = useCallback(
+    (next: File | null) => {
+      setBankbookFile(next);
+      runOcrPipeline(businessFile, next);
+    },
+    [businessFile, runOcrPipeline, setBankbookFile],
+  );
 
   useEffect(() => {
     if (!mismatchModalOpen) return;
@@ -475,16 +712,7 @@ export default function VerifyForm({ onOcrGateChange }: VerifyFormProps) {
                     업로드하신 사업자등록증과 통장사본이 일치하지 않습니다.
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                    예금주(상호) 정보가 다를 수 있어요. 서류를 확인한 뒤 다시 업로드해 주세요.
-                  </p>
-                  <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-                    <span className="font-semibold text-slate-600">개발용 목업:</span> 사업자등록증 또는
-                    통장 파일명에{' '}
-                    <code className="rounded bg-slate-200 px-1">wrong</code>,{' '}
-                    <code className="rounded bg-slate-200 px-1">fail</code>,{' '}
-                    <code className="rounded bg-slate-200 px-1">불일치</code>,{' '}
-                    <code className="rounded bg-slate-200 px-1">other</code> 가 들어가면 다른 상호로
-                    인식해 불일치로 처리합니다.
+                    예금주 정보와 사업자 상호/대표자명이 다를 수 있어요. 서류를 확인한 뒤 다시 업로드해 주세요.
                   </p>
                 </div>
               </div>
@@ -512,11 +740,31 @@ export default function VerifyForm({ onOcrGateChange }: VerifyFormProps) {
         </div>
 
         <div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-7 lg:gap-8">
-          <DocumentUploadSlot title="사업자등록증" file={businessFile} onChange={setBusinessFile} />
-          <DocumentUploadSlot title="통장사본" file={bankbookFile} onChange={setBankbookFile} />
+          <DocumentUploadSlot
+            title="사업자등록증"
+            file={businessFile}
+            onChange={handleBusinessFileChange}
+          />
+          <DocumentUploadSlot
+            title="통장사본"
+            file={bankbookFile}
+            onChange={handleBankbookFileChange}
+          />
         </div>
+        {ocrBusy ? (
+          <p className="mt-3 text-sm font-medium text-blue-700">
+            OCR 인식 중입니다... 파일 크기에 따라 최대 10~20초 정도 걸릴 수 있어요.
+          </p>
+        ) : null}
+        {ocrError ? <p className="mt-3 text-sm font-medium text-red-600">{ocrError}</p> : null}
 
-        <NtsVerifySection />
+        <NtsVerifySection
+          businessNumber={ocrExtracted?.businessNumber ?? ''}
+          ntsStatus={ntsStatus}
+          ntsMessage={ntsMessage}
+          onVerify={handleNtsVerify}
+          disabled={!ocrExtracted?.businessNumber || ocrBusy}
+        />
       </section>
       {mismatchModal}
     </>

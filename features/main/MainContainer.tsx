@@ -1,26 +1,29 @@
 'use client';
 
 import { Building2, Check, MailWarning } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+import { Button } from '@/components/ui/button';
 
 export default function MainContainer() {
   const [activeStep, setActiveStep] = useState(0);
 
-  const quickActions = [
+  const quickActions: { step: string; title: string; description: React.ReactNode }[] = [
     {
       step: '1',
       title: '발주서 작성',
-      description: '거래처 선택만으로 검증된 계좌·정보 자동 입력',
+      description: <>거래처 선택만으로<br />검증된 계좌·정보 자동 입력</>,
     },
     {
       step: '2',
-      title: '은행 검증·안전결제 묶음',
-      description: '거래 토큰 발행 · 결제 조건 보관 · 위변조 차단',
+      title: '은행 검증·안전거래 묶음',
+      description: <>거래 토큰 발행 · 결제 조건 보관<br /> · 위변조 차단</>,
     },
     {
       step: '3',
       title: '조건 충족 시 이체 알람 전송',
-      description: '선급/잔금 자동 분할 · OTP 인증 후 송금',
+      description: <>선급/잔금 자동 분할 · OTP 인증 후 송금</>,
     },
   ];
 
@@ -40,25 +43,30 @@ export default function MainContainer() {
       <div className="grid gap-9 md:grid-cols-[1.15fr_0.85fr] md:items-center">
         <div className="space-y-15 md:pl-6 md:pr-6">
           <h1 className="text-4xl mt-10 font-bold leading-tight tracking-tight text-slate-900">
-            통장사본 없는 거래,
+            기업 간 거래,
             <br />
             은행이 직접 보호합니다.
           </h1>
           <p className="max-w-xl text-base leading-7 text-slate-600">
-            사업자등록증, 통장사본을 매번 주고받지 않아도 됩니다.
+            인증된 사업자끼리만 거래가 성사되어,
             <br />
-            발주부터 결제까지, 은행이 검증한 거래만 안전하게 이어집니다.
+            견적서 작성부터 최종 결제까지 모든 단계를 하나의 흐름으로 보호합니다.
           </p>
           <div className="mb-7 flex flex-wrap gap-3">
-            <button
+            <Button
+              asChild
               id="order-request"
-              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-blue-700"
+              className="h-11 rounded-xl px-5 text-sm font-semibold transition hover:-translate-y-0.5"
             >
-              무료로 시작하기
-            </button>
-            <button className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700">
-              기능 둘러보기
-            </button>
+              <Link href="/signup">무료로 시작하기</Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 rounded-xl border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
+            >
+              <a href="/#service">기능 둘러보기</a>
+            </Button>
           </div>
           <p className="mb-3 mt-10 max-w-xl text-sm leading-7 text-slate-400">
             이미 5,200개의 기업이 사용중

@@ -53,7 +53,11 @@ function formatPoIssuedAt(iso: string) {
   if (iso.includes('T')) {
     const d = new Date(iso);
     const date = iso.slice(0, 10).replace(/-/g, '.');
-    const time = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const time = d.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
     return `${date} ${time}`;
   }
   return iso.replace(/-/g, '.');

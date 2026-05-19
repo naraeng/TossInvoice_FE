@@ -42,7 +42,7 @@ export default function StepHeader({
             {canProceedToAccount ? (
               <Button
                 asChild
-                className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:px-5"
+                className="h-10 rounded-xl px-4 text-sm font-semibold shadow-sm sm:px-5"
               >
                 <Link href="/signup/account" title="계정 정보 입력 단계로 이동">
                   다음: 계정 정보
@@ -54,7 +54,7 @@ export default function StepHeader({
                 type="button"
                 disabled
                 title="사업자등록증과 통장사본 상호가 일치하면 활성화됩니다"
-                className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white opacity-50 shadow-sm sm:px-5"
+                className="h-10 rounded-xl px-4 text-sm font-semibold shadow-sm sm:px-5"
               >
                 다음: 계정 정보
                 <ChevronRight className="ml-0.5 h-4 w-4" aria-hidden />

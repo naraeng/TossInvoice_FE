@@ -5,18 +5,20 @@ import ProcessContainer from '@/features/main/ProcessContainer';
 import ReasonContainer from '@/features/main/ReasonContainer';
 import StartContainer from '@/features/main/StartContainer';
 import Header from '@/components/layout/Header';
+import PageContainer from '@/components/layout/PageContainer';
+
 export default function Home() {
   return (
-    <div>
-      <div className="relative overflow-hidden bg-[#f6f9ff] text-slate-900">
-        <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-24 pt-8 md:px-10">
-          <Header />
+    <div className="min-h-screen bg-[#f6f9ff] text-slate-900">
+      <Header />
+      <div className="relative overflow-hidden">
+        <PageContainer className="relative flex flex-col gap-8 pb-24 pt-8">
           <MainContainer />
           <ReasonContainer />
           <CompareContainer />
           <ProcessContainer />
-          <StartContainer /> 
-        </main>
+          <StartContainer />
+        </PageContainer>
       </div>
     </div>
   );
