@@ -1,12 +1,18 @@
 export type TradeHeaderProps = {
-  inProgressCount: number;
-  completedCount: number;
+  totalPartners: number;
+  activePartners: number;
+  newPartnersThisMonth: number;
 };
 
-export default function TradeHeader({ inProgressCount, completedCount }: TradeHeaderProps) {
+export default function TradeHeader({
+  totalPartners,
+  activePartners,
+  newPartnersThisMonth,
+}: TradeHeaderProps) {
   const statCards = [
-    { label: '거래 중', value: inProgressCount, valueClassName: 'text-blue-600' },
-    { label: '완료 거래', value: completedCount, valueClassName: 'text-emerald-600' },
+    { label: '총 거래처', value: totalPartners, valueClassName: 'text-slate-900' },
+    { label: '거래 중', value: activePartners, valueClassName: 'text-blue-600' },
+    { label: '이번 달 신규', value: newPartnersThisMonth, valueClassName: 'text-emerald-600' },
   ] as const;
 
   return (

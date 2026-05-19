@@ -91,8 +91,8 @@ function logOcrDebug(payload: {
 /** 업로드 한도: 10MiB (1024 × 1024 × 10 바이트) */
 const MAX_BYTES = 10 * 1024 * 1024;
 
-const ACCEPT_ATTR =
-  'image/png,image/jpeg,image/jpg,image/webp,image/gif,image/heic,image/heif,application/pdf,.pdf';
+const ACCEPT_BUSINESS = 'application/pdf,.pdf';
+const ACCEPT_BANKBOOK = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
 
 /** 바이너리 기준 MB (OS·탐색기와 동일한 방식에 가깝게 표시) */
 function formatFileSize(bytes: number): string {
@@ -101,21 +101,24 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isAllowedUpload(file: File): boolean {
+function validateBusinessFile(file: File): string | null {
   const mime = file.type.toLowerCase();
-  if (
-    mime === 'application/pdf' ||
-    mime.startsWith('image/png') ||
-    mime.startsWith('image/jpeg') ||
-    mime.startsWith('image/webp') ||
-    mime.startsWith('image/gif') ||
-    mime.startsWith('image/heic') ||
-    mime.startsWith('image/heif')
-  ) {
-    return true;
-  }
   const ext = file.name.split('.').pop()?.toLowerCase();
-  return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf', 'heic', 'heif'].includes(ext ?? '');
+  if (mime === 'application/pdf' || ext === 'pdf') return null;
+  return 'PDF 파일만 업로드할 수 있어요. (사업자등록증 PDF)';
+}
+
+function validateBankbookFile(file: File): string | null {
+  const mime = file.type.toLowerCase();
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (
+    mime.startsWith('image/jpeg') ||
+    mime.startsWith('image/png') ||
+    ext === 'jpg' ||
+    ext === 'jpeg' ||
+    ext === 'png'
+  ) return null;
+  return 'JPG 또는 PNG 이미지 파일만 업로드할 수 있어요. (통장사본)';
 }
 
 function isImageFile(file: File): boolean {
@@ -126,11 +129,14 @@ function isImageFile(file: File): boolean {
 
 type DocumentUploadSlotProps = {
   title: string;
+  hintText: string;
+  accept: string;
+  validateFile: (file: File) => string | null;
   file: File | null;
   onChange: (file: File | null) => void;
 };
 
-function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) {
+function DocumentUploadSlot({ title, hintText, accept, validateFile, file, onChange }: DocumentUploadSlotProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
   const dialogTitleId = useId();
@@ -169,8 +175,9 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
         onChange(null);
         return;
       }
-      if (!isAllowedUpload(next)) {
-        setError('PNG, JPG, WEBP, GIF, HEIC, PDF 파일만 업로드할 수 있어요.');
+      const validationError = validateFile(next);
+      if (validationError) {
+        setError(validationError);
         return;
       }
       if (next.size > MAX_BYTES) {
@@ -320,7 +327,7 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
         ref={inputRef}
         type="file"
         className="sr-only"
-        accept={ACCEPT_ATTR}
+        accept={accept}
         onChange={handleInputChange}
       />
 
@@ -405,9 +412,10 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
         >
           <FileText className="mb-3 h-10 w-10 text-slate-300" strokeWidth={1.25} aria-hidden />
           <p className="text-sm font-bold text-slate-900">{title}</p>
-          <p className="mt-1 text-xs text-slate-500">파일을 끌어다 놓거나 클릭
+          <p className="mt-1 text-xs text-slate-500">
+            파일을 끌어다 놓거나 클릭
             <br />
-            이미지·PDF 업로드 가능 · 최대 10MB
+            {hintText}
           </p>
           <Button
             type="button"
@@ -735,18 +743,24 @@ export default function VerifyForm({ onOcrGateChange }: VerifyFormProps) {
         <div className="mb-5">
           <h2 className="text-lg font-bold text-slate-900">1. 서류 업로드</h2>
           <p className="mt-1 text-sm text-slate-500">
-            이미지·PDF 업로드 가능 · 최대 10MB · 사업자등록증과 통장사본 모두 업로드
+            최대 10MB · 사업자등록증(PDF)과 통장사본(JPG/PNG) 모두 업로드해 주세요
           </p>
         </div>
 
         <div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-7 lg:gap-8">
           <DocumentUploadSlot
             title="사업자등록증"
+            hintText="PDF 파일만 가능 · 최대 10MB"
+            accept={ACCEPT_BUSINESS}
+            validateFile={validateBusinessFile}
             file={businessFile}
             onChange={handleBusinessFileChange}
           />
           <DocumentUploadSlot
             title="통장사본"
+            hintText="JPG 또는 PNG 이미지만 가능 · 최대 10MB"
+            accept={ACCEPT_BANKBOOK}
+            validateFile={validateBankbookFile}
             file={bankbookFile}
             onChange={handleBankbookFileChange}
           />

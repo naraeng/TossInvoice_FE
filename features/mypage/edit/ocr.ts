@@ -128,6 +128,25 @@ function sanitizeCeoName(value: string): string {
   return nameHit?.[0] ?? trimmed;
 }
 
+export function sanitizeAccountHolder(value: string): string {
+  if (!value) return '';
+  const trimmed = trimBySectionBoundary(value, [
+    '계좌',
+    '은행',
+    '입금',
+    '출금',
+    '잔액',
+    '통장',
+    '사업자',
+  ]);
+  const withoutHonorific = collapseSpaces(trimmed)
+    .replace(/\s*님\b/g, '')
+    .replace(/[·•]/g, ' ')
+    .trim();
+  const nameHit = withoutHonorific.match(/[가-힣]{2,5}/);
+  return nameHit?.[0] ?? '';
+}
+
 function sanitizeAddress(value: string): string {
   const trimmed = trimBySectionBoundary(value, [
     '사업의종류',
@@ -251,9 +270,53 @@ function toAccount(text: string): string {
   return `${hit[1]}-${hit[2]}-${hit[3]}`;
 }
 
+const BANK_ALIASES: { pattern: RegExp; name: string }[] = [
+  { pattern: /\(주\)\s*카카오\s*뱅크|\(주\)\s*카카오뱅크/i, name: '카카오뱅크' },
+  { pattern: /주식회사\s*카카오\s*뱅크|주식회사\s*카카오뱅크/i, name: '카카오뱅크' },
+  { pattern: /카\s*카\s*오\s*뱅\s*크|카카오\s*뱅크|카카오뱅크|kakao\s*bank/i, name: '카카오뱅크' },
+  { pattern: /토\s*스\s*뱅\s*크|토스\s*뱅크|토스뱅크|toss\s*bank/i, name: '토스뱅크' },
+  { pattern: /국민\s*은행|국민은행|kb\s*국민/i, name: '국민은행' },
+  { pattern: /신한\s*은행|신한은행/i, name: '신한은행' },
+  { pattern: /우리\s*은행|우리은행/i, name: '우리은행' },
+  { pattern: /하나\s*은행|하나은행/i, name: '하나은행' },
+  { pattern: /농협\s*은행|농협은행|nh\s*농협/i, name: '농협은행' },
+  { pattern: /기업\s*은행|기업은행|ibk/i, name: '기업은행' },
+];
+
+function extractBankFromCorporateLine(text: string): string {
+  const corpPatterns: { pattern: RegExp; name: string }[] = [
+    { pattern: /\(주\)\s*([가-힣]*\s*뱅크)/i, name: '' },
+    { pattern: /주식회사\s*([가-힣]+\s*뱅크)/i, name: '' },
+  ];
+  for (const { pattern } of corpPatterns) {
+    const match = text.match(pattern);
+    const raw = match?.[1] ? collapseSpaces(match[1]) : '';
+    if (!raw) continue;
+    if (/카카오/i.test(raw)) return '카카오뱅크';
+    if (/토스/i.test(raw)) return '토스뱅크';
+    const listed = BANK_NAMES.find((bank) => raw.includes(bank) || bank.includes(raw.replace(/\s/g, '')));
+    if (listed) return listed;
+  }
+  if (/카카오/i.test(text) && /뱅크|bank/i.test(text)) return '카카오뱅크';
+  return '';
+}
+
 function extractBank(text: string): string {
-  const found = BANK_NAMES.find((bank) => text.includes(bank));
-  return found ?? '';
+  const hits: { name: string; index: number }[] = [];
+
+  for (const bank of BANK_NAMES) {
+    const idx = text.indexOf(bank);
+    if (idx >= 0) hits.push({ name: bank, index: idx });
+  }
+  for (const { pattern, name } of BANK_ALIASES) {
+    const match = text.match(pattern);
+    if (match?.index !== undefined) hits.push({ name, index: match.index });
+  }
+
+  if (hits.length === 0) return extractBankFromCorporateLine(text);
+  // 문서 후반(통장 발행 은행)에 나온 이름을 우선
+  hits.sort((a, b) => b.index - a.index);
+  return hits[0].name;
 }
 
 function detectCompanyType(text: string): 'CORPORATE' | 'INDIVIDUAL' {
@@ -348,21 +411,21 @@ export function parseBusinessDocText(text: string): BusinessDocExtract {
 
 export function parseBankbookText(text: string): BankbookExtract {
   const flat = collapseSpaces(text);
-  const accountHolder =
-    readByLabel(text, ['예금주', '받는분', '성명']) ??
+  const accountHolderRaw =
     firstMatch(flat, [
+      /예\s*금\s*주\s*[:：]?\s*([가-힣]{2,5})/i,
       /([가-힣]{2,5})\s*님\s*의?\s*계좌/i,
       /([가-힣]{2,5})\s*계좌가\s*개설/i,
-      /([가-힣]{2,5})\s*님\s*의?\s*계좌가\s*개설/i,
-    ]) ??
+    ]) ||
+    readByLabel(text, ['예금주', '받는분']) ||
     '';
   const account = toAccount(text);
-  const bank = extractBank(text);
+  const bank = extractBank(text) || extractBankFromCorporateLine(text);
 
   return {
     bank,
     account,
-    accountHolder: collapseSpaces(accountHolder),
+    accountHolder: sanitizeAccountHolder(accountHolderRaw),
   };
 }
 

@@ -6,9 +6,16 @@ const BACKEND_BASE_URL =
 export async function GET(request: Request) {
   const authorization = request.headers.get('authorization');
 
+  const { searchParams } = new URL(request.url);
+  const upstreamUrl = new URL(`${BACKEND_BASE_URL}/api/v1/trades`);
+  for (const key of ['role', 'phase', 'page', 'size'] as const) {
+    const value = searchParams.get(key);
+    if (value !== null) upstreamUrl.searchParams.set(key, value);
+  }
+
   let upstream: Response;
   try {
-    upstream = await fetch(`${BACKEND_BASE_URL}/api/v1/trades`, {
+    upstream = await fetch(upstreamUrl.toString(), {
       method: 'GET',
       headers: {
         ...(authorization ? { Authorization: authorization } : {}),

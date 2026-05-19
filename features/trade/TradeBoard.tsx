@@ -1,23 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ArrowDownUp, Check, ClipboardList, Plus } from 'lucide-react';
+import { ArrowDownUp, Check, ClipboardList } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
 import TransactionProgress from '@/features/dashboard/TransactionProgress';
-import type { TradeApiRow } from '@/features/trade/types';
-import Link from 'next/link';
+import type { TradeApiRow, TradePhase, TradeRole } from '@/features/trade/types';
 
-type TradeTab = 'sales' | 'purchase';
-type TradeFilter = 'inProgress' | 'completed';
 type SortOption = 'recentDesc' | 'recentAsc' | 'progressDesc' | 'progressAsc';
 
-type TradeRow = {
+type ActiveRow = {
   id: string;
-  type: TradeTab;
-  status: TradeFilter;
   company: string;
   badgeText: string;
   badgeClassName: string;
@@ -29,9 +23,8 @@ type TradeRow = {
   date: string;
 };
 
-type CompletedTradeRow = {
+type CompletedRow = {
   id: string;
-  type: TradeTab;
   invoiceNo: string;
   counterpart: string;
   itemSummary: string;
@@ -39,14 +32,19 @@ type CompletedTradeRow = {
   completedDate: string;
 };
 
-const FILTER_OPTIONS: { id: TradeFilter; label: string }[] = [
-  { id: 'inProgress', label: '거래중' },
-  { id: 'completed', label: '완료거래' },
+const PHASE_OPTIONS: { id: TradePhase; label: string }[] = [
+  { id: 'ACTIVE', label: '거래중' },
+  { id: 'COMPLETED', label: '완료거래' },
 ];
 
-const TAB_OPTIONS: { id: TradeTab; label: string }[] = [
-  { id: 'sales', label: '수주중' },
-  { id: 'purchase', label: '발주중' },
+const ROLE_OPTIONS_ACTIVE: { id: TradeRole; label: string }[] = [
+  { id: 'SELLER', label: '수주중' },
+  { id: 'BUYER', label: '발주중' },
+];
+
+const ROLE_OPTIONS_COMPLETED: { id: TradeRole; label: string }[] = [
+  { id: 'SELLER', label: '수주거래' },
+  { id: 'BUYER', label: '발주거래' },
 ];
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -55,11 +53,6 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'progressDesc', label: '진행도 높은순' },
   { id: 'progressAsc', label: '진행도 낮은순' },
 ];
-
-const COMPLETED_TAB_LABELS: Record<TradeTab, string> = {
-  sales: '수주거래',
-  purchase: '발주거래',
-};
 
 function formatYmd(value?: string | null): string {
   if (!value) return '-';
@@ -74,11 +67,11 @@ function formatWon(amount?: number): string {
 }
 
 /**
- * PENDING_PO           → 0  (발주 진행중)
- * PENDING_SELLER_SIGN  → 1  (승인 진행중)
- * PENDING_INVOICE      → 2  (납품 진행중)
- * PENDING_BUYER_CONFIRM→ 3  (결제 진행중)
- * COMPLETED            → 4  (모두 완료)
+ * PENDING_PO           → 0
+ * PENDING_SELLER_SIGN  → 1
+ * PENDING_INVOICE      → 2
+ * PENDING_BUYER_CONFIRM→ 3
+ * COMPLETED            → 4
  */
 function statusToProgressStep(status: string): number {
   switch (status) {
@@ -104,207 +97,126 @@ function badgeColorBySeed(seed: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function toRowsFromApi(trades: TradeApiRow[]): {
-  inProgress: TradeRow[];
-  completed: CompletedTradeRow[];
-} {
-  const inProgress: TradeRow[] = [];
-  const completed: CompletedTradeRow[] = [];
-
-  for (const trade of trades) {
-    const isSales = trade.role === 'SELLER';
-    const counterpart = isSales ? trade.buyer : trade.seller;
-    // const selfCompany = isSales ? trade.seller : trade.buyer;
-    const tab: TradeTab = isSales ? 'sales' : 'purchase';
-    const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
-
-    if (status === 'inProgress') {
-      inProgress.push({
-        id: String(trade.tradeId),
-        type: tab,
-        status,
-        company: counterpart.companyName,
-        badgeText: (counterpart.companyName[0] ?? '거').toUpperCase(),
-        badgeClassName: badgeColorBySeed(counterpart.companyName),
-        businessNumber: counterpart.businessNumber,
-        owner: counterpart.ceoName ?? '-',
-        itemSummary: trade.itemsSummary || '-',
-        progressStep: statusToProgressStep(trade.status),
-        cancelled: trade.status === 'CANCELLED',
-        date: formatYmd(trade.createdAt),
-      });
-    } else {
-      completed.push({
-        id: String(trade.tradeId),
-        type: tab,
-        invoiceNo: trade.invoiceDocNumber || `INV-${trade.tradeId}`,
-        counterpart: counterpart.companyName,
-        itemSummary: trade.itemsSummary || '-',
-        amount: formatWon(trade.totalAmount),
-        completedDate: formatYmd(trade.completedAt || trade.createdAt),
-      });
-    }
-  }
-
-  return { inProgress, completed };
+function toActiveRow(trade: TradeApiRow): ActiveRow {
+  const counterpart = trade.role === 'SELLER' ? trade.buyer : trade.seller;
+  return {
+    id: String(trade.tradeId),
+    company: counterpart.companyName,
+    badgeText: (counterpart.companyName[0] ?? '거').toUpperCase(),
+    badgeClassName: badgeColorBySeed(counterpart.companyName),
+    businessNumber: counterpart.businessNumber,
+    owner: counterpart.ceoName ?? '-',
+    itemSummary: trade.itemsSummary || '-',
+    progressStep: statusToProgressStep(trade.status),
+    cancelled: trade.status === 'CANCELLED',
+    date: formatYmd(trade.createdAt),
+  };
 }
 
-function toRowsFromApiWithMe(
-  trades: TradeApiRow[],
-  myBusinessNumber: string
-): { inProgress: TradeRow[]; completed: CompletedTradeRow[] } {
-  const normalizedMe = myBusinessNumber.replace(/\D/g, '');
-  if (normalizedMe.length !== 10) return { inProgress: [], completed: [] };
-
-  const inProgress: TradeRow[] = [];
-  const completed: CompletedTradeRow[] = [];
-
-  for (const trade of trades) {
-    const sellerBn = (trade.seller.businessNumber ?? '').replace(/\D/g, '');
-    const buyerBn = (trade.buyer.businessNumber ?? '').replace(/\D/g, '');
-
-    const isMeSeller = sellerBn === normalizedMe;
-    const isMeBuyer = buyerBn === normalizedMe;
-    if (!isMeSeller && !isMeBuyer) continue;
-
-    const counterpart = isMeSeller ? trade.buyer : trade.seller;
-    // const selfCompany = isMeSeller ? trade.seller : trade.buyer;
-    const tab: TradeTab = isMeSeller ? 'sales' : 'purchase';
-    const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
-
-    if (status === 'inProgress') {
-      inProgress.push({
-        id: String(trade.tradeId),
-        type: tab,
-        status,
-        company: counterpart.companyName,
-        badgeText: (counterpart.companyName[0] ?? '거').toUpperCase(),
-        badgeClassName: badgeColorBySeed(counterpart.companyName),
-        businessNumber: counterpart.businessNumber,
-        owner: counterpart.ceoName ?? '-',
-        itemSummary: trade.itemsSummary || '-',
-        progressStep: statusToProgressStep(trade.status),
-        cancelled: trade.status === 'CANCELLED',
-        date: formatYmd(trade.createdAt),
-      });
-    } else {
-      completed.push({
-        id: String(trade.tradeId),
-        type: tab,
-        invoiceNo: trade.invoiceDocNumber || `INV-${trade.tradeId}`,
-        counterpart: counterpart.companyName,
-        itemSummary: trade.itemsSummary || '-',
-        amount: formatWon(trade.totalAmount),
-        completedDate: formatYmd(trade.completedAt || trade.createdAt),
-      });
-    }
-  }
-
-  return { inProgress, completed };
+function toCompletedRow(trade: TradeApiRow): CompletedRow {
+  const counterpart = trade.role === 'SELLER' ? trade.buyer : trade.seller;
+  return {
+    id: String(trade.tradeId),
+    invoiceNo: trade.invoiceDocNumber || `INV-${trade.tradeId}`,
+    counterpart: counterpart.companyName,
+    itemSummary: trade.itemsSummary || '-',
+    amount: formatWon(trade.totalAmount),
+    completedDate: formatYmd(trade.completedAt || trade.createdAt),
+  };
 }
 
 function parseTradeDate(value: string) {
   return new Date(value.replaceAll('.', '-')).getTime();
 }
 
+export type TradeBoardProps = {
+  trades: TradeApiRow[];
+  activeRole: TradeRole;
+  activePhase: TradePhase;
+  onRoleChange: (role: TradeRole) => void;
+  onPhaseChange: (phase: TradePhase) => void;
+  loading?: boolean;
+};
+
 export default function TradeBoard({
   trades,
-  myBusinessNumber,
-}: {
-  trades: TradeApiRow[];
-  myBusinessNumber: string;
-}) {
-  const searchParams = useSearchParams();
-  const [activeFilter, setActiveFilter] = useState<TradeFilter>('inProgress');
-  const [activeTab, setActiveTab] = useState<TradeTab>(() =>
-    searchParams.get('tab') === 'purchase' ? 'purchase' : 'sales'
-  );
+  activeRole,
+  activePhase,
+  onRoleChange,
+  onPhaseChange,
+  loading = false,
+}: TradeBoardProps) {
   const [activeSort, setActiveSort] = useState<SortOption>('recentDesc');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
-  const tradeRows = useMemo(
-    () =>
-      myBusinessNumber ? toRowsFromApiWithMe(trades, myBusinessNumber) : toRowsFromApi(trades),
-    [myBusinessNumber, trades]
-  );
-
-  const rows = useMemo(() => {
-    const filteredRows = tradeRows.inProgress.filter(
-      (row) => row.type === activeTab && row.status === activeFilter
-    );
-
-    return [...filteredRows].sort((a, b) => {
+  // 서버가 role + phase 로 이미 필터링해서 내려줬으므로 그대로 사용
+  const activeRows = useMemo<ActiveRow[]>(() => {
+    if (activePhase !== 'ACTIVE') return [];
+    const rows = trades.map(toActiveRow);
+    return [...rows].sort((a, b) => {
       if (activeSort === 'recentDesc') return parseTradeDate(b.date) - parseTradeDate(a.date);
       if (activeSort === 'recentAsc') return parseTradeDate(a.date) - parseTradeDate(b.date);
       if (activeSort === 'progressDesc') return b.progressStep - a.progressStep;
       return a.progressStep - b.progressStep;
     });
-  }, [activeFilter, activeSort, activeTab, tradeRows.inProgress]);
+  }, [trades, activePhase, activeSort]);
 
-  const completedRows = useMemo(
-    () => tradeRows.completed.filter((row) => row.type === activeTab),
-    [activeTab, tradeRows.completed]
-  );
+  const completedRows = useMemo<CompletedRow[]>(() => {
+    if (activePhase !== 'COMPLETED') return [];
+    return trades.map(toCompletedRow);
+  }, [trades, activePhase]);
 
+  const roleOptions = activePhase === 'COMPLETED' ? ROLE_OPTIONS_COMPLETED : ROLE_OPTIONS_ACTIVE;
   const activeSortLabel =
     SORT_OPTIONS.find((option) => option.id === activeSort)?.label ?? '최근 거래순';
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section
+      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 transition-opacity ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}
+    >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {FILTER_OPTIONS.map((option) => {
-              const isActive = option.id === activeFilter;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setActiveFilter(option.id)}
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {option.id === 'inProgress' ? (
-                    <ClipboardList className="h-3.5 w-3.5" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
-                  )}
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          <Button
-            asChild
-            className="mt-2 rounded-xl border-[1.5px] border-blue-600 bg-white px-6 py-4.5 text-blue-600 hover:bg-blue-600 hover:text-white"
-          >
-            <Link href="/documents/quotes/new" className="flex items-center justify-center">
-              <Plus className="mr-1 size-4" />
-              <span className="text-sm font-semibold">거래 시작</span>
-            </Link>
-          </Button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {PHASE_OPTIONS.map((option) => {
+            const isActive = option.id === activePhase;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onPhaseChange(option.id)}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {option.id === 'ACTIVE' ? (
+                  <ClipboardList className="h-3.5 w-3.5" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
+                {option.label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-4">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {TAB_OPTIONS.map((tab) => {
-                const isActive = tab.id === activeTab;
+              {roleOptions.map((option) => {
+                const isActive = option.id === activeRole;
                 return (
                   <button
-                    key={tab.id}
+                    key={option.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => onRoleChange(option.id)}
                     className={`cursor-pointer rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
                       isActive
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    {activeFilter === 'completed' ? COMPLETED_TAB_LABELS[tab.id] : tab.label}
+                    {option.label}
                   </button>
                 );
               })}
@@ -346,7 +258,7 @@ export default function TradeBoard({
             </div>
           </div>
 
-          {activeFilter === 'completed' ? (
+          {activePhase === 'COMPLETED' ? (
             <div>
               <table className="w-full table-fixed text-sm">
                 <colgroup>
@@ -426,7 +338,7 @@ export default function TradeBoard({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {activeRows.map((row) => (
                     <tr key={row.id} className="border-b border-slate-50 last:border-0">
                       <td className="py-4 pl-3 pr-2">
                         <div className="flex items-center gap-3">

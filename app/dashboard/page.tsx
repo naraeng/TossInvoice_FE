@@ -12,50 +12,104 @@ import { fetchMe } from '@/lib/users/fetch-me';
 import { saveMemberProfile } from '@/lib/auth-user';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
 import type { TransactionRow } from '@/features/dashboard/TransactionTableCard';
-import type { TradeApiRow } from '@/features/trade/types';
+import type { TradeApiRow, TradePageResponse } from '@/features/trade/types';
 
+type TradeResponse = { result?: TradePageResponse | null };
+type MyInfoResponse = {
+  result?: {
+    businessNumber?: string;
+    companyName?: string;
+    ceoName?: string;
+  } | null;
+};
+
+export type MonthlyTrendItem = {
+  month: string; // "YYYY-MM"
+  sellingAmount: number;
+  buyingAmount: number;
+};
+
+type DashboardHomeResponse = {
+  result?: {
+    todayActiveCount?: number;
+    sellingInProgress?: { total?: number; awaitingCounterSign?: number };
+    buyingInProgress?: {
+      total?: number;
+      poInProgress?: number;
+      deliveryWaiting?: number;
+      inspectionWaiting?: number;
+    };
+    paymentWaiting?: { amount?: number; depositCount?: number; balanceCount?: number };
+    thisMonthBuyAmount?: { amount?: number; deltaPercent?: number; direction?: string };
+    monthlyTrend?: MonthlyTrendItem[];
+  } | null;
+};
 
 function statusToProgressStep(status: string): number {
   switch (status) {
-    case 'PENDING_PO': return 0;
-    case 'PENDING_SELLER_SIGN': return 1;
-    case 'PENDING_INVOICE': return 2;
-    case 'PENDING_BUYER_CONFIRM': return 3;
-    case 'COMPLETED': return 4;
-    default: return 0;
+    case 'PENDING_PO':
+      return 0;
+    case 'PENDING_SELLER_SIGN':
+      return 1;
+    case 'PENDING_INVOICE':
+      return 2;
+    case 'PENDING_BUYER_CONFIRM':
+      return 3;
+    case 'COMPLETED':
+      return 4;
+    default:
+      return 0;
   }
-}
-
-function isThisMonth(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }
 
 export default function DashboardPage() {
   const [trades, setTrades] = useState<TradeApiRow[]>([]);
-  const [myBn, setMyBn] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [ceoName, setCeoName] = useState('');
+
+  // Dashboard Home KPI
+  const [inProgressCount, setInProgressCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0);
+  const [monthlyNetAmount, setMonthlyNetAmount] = useState(0);
+  const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrendItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [fetched, meResult] = await Promise.all([fetchMyTrades(), fetchMe()]);
+        const [sellerRes, buyerRes, meRes, homeRes] = await Promise.all([
+          apiClient.get('/api/v1/trades?role=SELLER&phase=ACTIVE&page=1&size=5'),
+          apiClient.get('/api/v1/trades?role=BUYER&phase=ACTIVE&page=1&size=5'),
+          apiClient.get('/api/v1/users/me'),
+          apiClient.get('/api/v1/dashboard/home'),
+        ]);
         if (cancelled) return;
 
-        const bn = (meResult?.businessNumber ?? '').replace(/\D/g, '');
-        const mine = fetched;
+        // 거래 목록 (미리보기 테이블용) — SELLER ACTIVE + BUYER ACTIVE 합쳐서 사용
+        const sellerTrades = (sellerRes.data as TradeResponse).result?.trades ?? [];
+        const buyerTrades = (buyerRes.data as TradeResponse).result?.trades ?? [];
+        const fetched = [...sellerTrades, ...buyerTrades];
 
+        // 내 정보
+        const meResult = (meRes.data as MyInfoResponse)?.result;
         const company = meResult?.companyName ?? '';
         const ceo = meResult?.ceoName ?? '';
-        setMyBn(bn);
-        setTrades(mine);
+
+        // Dashboard Home KPI
+        const home = (homeRes.data as DashboardHomeResponse)?.result;
+        const selling = home?.sellingInProgress;
+        const buying = home?.buyingInProgress;
+
+        setTrades(fetched);
         setCompanyName(company);
         setCeoName(ceo);
+        setInProgressCount(home?.todayActiveCount ?? 0);
+        setPendingCount((selling?.awaitingCounterSign ?? 0) + (buying?.inspectionWaiting ?? 0));
+        setPendingPaymentAmount(home?.paymentWaiting?.amount ?? 0);
+        setMonthlyNetAmount(home?.thisMonthBuyAmount?.amount ?? 0);
+        setMonthlyTrend(home?.monthlyTrend ?? []);
 
-        // localStorage에 저장해 MemberHeader 등 다른 곳에서도 사용 가능하게
         if (company || ceo) {
           saveMemberProfile({ companyName: company, ceoName: ceo }, isRememberLoginEnabled());
         }
@@ -63,59 +117,16 @@ export default function DashboardPage() {
         if (cancelled) return;
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // ── 헤더 통계 ──────────────────────────────────────────────────────────────
-  const inProgressCount = useMemo(
-    () => trades.filter((t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length,
-    [trades],
-  );
-
-  /** 내가 지금 액션을 취해야 하는 거래 수 */
-  const pendingCount = useMemo(
-    () =>
-      trades.filter((t) => {
-        const isSeller = (t.seller.businessNumber ?? '').replace(/\D/g, '') === myBn;
-        return (
-          (isSeller && t.status === 'PENDING_SELLER_SIGN') ||
-          (!isSeller && t.status === 'PENDING_BUYER_CONFIRM')
-        );
-      }).length,
-    [trades, myBn],
-  );
-
-  /** SELLER 입장에서 PENDING_BUYER_CONFIRM 인 거래 totalAmount 합계 (입금 예정) */
-  const pendingPaymentAmount = useMemo(
-    () =>
-      trades
-        .filter(
-          (t) =>
-            (t.seller.businessNumber ?? '').replace(/\D/g, '') === myBn &&
-            t.status === 'PENDING_BUYER_CONFIRM',
-        )
-        .reduce((sum, t) => sum + (t.totalAmount ?? 0), 0),
-    [trades, myBn],
-  );
-
-  /** 이번 달 완료된 거래 totalAmount 합계 */
-  const monthlyAmount = useMemo(
-    () =>
-      trades
-        .filter((t) => t.status === 'COMPLETED' && isThisMonth(t.completedAt ?? t.createdAt))
-        .reduce((sum, t) => sum + (t.totalAmount ?? 0), 0),
-    [trades],
-  );
-
-  // ── 거래 테이블 rows ────────────────────────────────────────────────────────
+  // ── 거래 테이블 rows (미리보기 5건) ────────────────────────────────────────
   const salesRows = useMemo<TransactionRow[]>(
     () =>
       trades
-        .filter(
-          (t) =>
-            (t.seller.businessNumber ?? '').replace(/\D/g, '') === myBn &&
-            t.status !== 'COMPLETED',
-        )
+        .filter((t) => t.role === 'SELLER' && t.status !== 'COMPLETED')
         .map((t) => ({
           id: t.invoiceDocNumber ?? `INV-${t.tradeId}`,
           partner: t.buyer.companyName,
@@ -123,17 +134,13 @@ export default function DashboardPage() {
           progressStep: statusToProgressStep(t.status),
           cancelled: t.status === 'CANCELLED',
         })),
-    [trades, myBn],
+    [trades]
   );
 
   const purchaseRows = useMemo<TransactionRow[]>(
     () =>
       trades
-        .filter(
-          (t) =>
-            (t.buyer.businessNumber ?? '').replace(/\D/g, '') === myBn &&
-            t.status !== 'COMPLETED',
-        )
+        .filter((t) => t.role === 'BUYER' && t.status !== 'COMPLETED')
         .map((t) => ({
           id: t.invoiceDocNumber ?? `INV-${t.tradeId}`,
           partner: t.seller.companyName,
@@ -141,7 +148,7 @@ export default function DashboardPage() {
           progressStep: statusToProgressStep(t.status),
           cancelled: t.status === 'CANCELLED',
         })),
-    [trades, myBn],
+    [trades]
   );
 
   return (
@@ -153,10 +160,10 @@ export default function DashboardPage() {
           inProgressCount={inProgressCount}
           pendingCount={pendingCount}
           pendingPaymentAmount={pendingPaymentAmount}
-          monthlyAmount={monthlyAmount}
+          monthlyNetAmount={monthlyNetAmount}
         />
         <div className="grid gap-4 lg:grid-cols-[2fr_0.9fr]">
-          <MonthlyGraph trades={trades} />
+          <MonthlyGraph monthlyTrend={monthlyTrend} />
           <NoticeList />
         </div>
         <DashboardTransactions salesRows={salesRows} purchaseRows={purchaseRows} />

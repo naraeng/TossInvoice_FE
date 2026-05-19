@@ -8,12 +8,18 @@ type DashboardHeaderProps = {
   inProgressCount?: number;
   pendingCount?: number;
   pendingPaymentAmount?: number;
-  monthlyAmount?: number;
+  monthlyNetAmount?: number;
 };
 
 function formatWon(amount: number): string {
   if (amount === 0) return '-';
   return `${amount.toLocaleString('ko-KR')}원`;
+}
+
+function formatNetWon(amount: number): string {
+  if (amount === 0) return '-';
+  const sign = amount > 0 ? '+' : '';
+  return `${sign}${amount.toLocaleString('ko-KR')}원`;
 }
 
 export default function DashboardHeader({
@@ -22,7 +28,7 @@ export default function DashboardHeader({
   inProgressCount = 0,
   pendingCount = 0,
   pendingPaymentAmount = 0,
-  monthlyAmount = 0,
+  monthlyNetAmount = 0,
 }: DashboardHeaderProps) {
   const greeting = companyName
     ? ceoName
@@ -50,10 +56,10 @@ export default function DashboardHeader({
       accent: 'text-slate-500',
     },
     {
-      label: '이번 달 거래액',
-      value: formatWon(monthlyAmount),
-      change: monthlyAmount > 0 ? '완료 거래 합산' : '-',
-      accent: 'text-emerald-600',
+      label: '이번 달 순손익',
+      value: formatNetWon(monthlyNetAmount),
+      change: monthlyNetAmount > 0 ? '수주 - 발주' : monthlyNetAmount < 0 ? '발주 초과' : '-',
+      accent: monthlyNetAmount > 0 ? 'text-emerald-600' : monthlyNetAmount < 0 ? 'text-red-500' : 'text-slate-400',
     },
   ];
 
@@ -64,8 +70,8 @@ export default function DashboardHeader({
           <p className="text-sm font-semibold text-blue-600">{greeting}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
             {inProgressCount > 0
-              ? `오늘 진행할 거래 ${inProgressCount}건이 기다리고 있어요`
-              : '오늘 진행 중인 거래가 없어요'}
+              ? `현재 ${inProgressCount}건의 거래가 진행중이에요`
+              : '현재 진행 중인 거래가 없어요'}
           </h1>
         </div>
         <Button asChild className="h-10 rounded-xl px-4 text-sm font-semibold">
