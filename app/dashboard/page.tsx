@@ -116,14 +116,19 @@ export default function DashboardPage() {
     [trades, myBn],
   );
 
-  /** 이번 달 완료된 거래 totalAmount 합계 */
-  const monthlyAmount = useMemo(
-    () =>
-      trades
-        .filter((t) => t.status === 'COMPLETED' && isThisMonth(t.completedAt ?? t.createdAt))
-        .reduce((sum, t) => sum + (t.totalAmount ?? 0), 0),
-    [trades],
-  );
+  /** 이번 달 순손익: 수주 완료(+) - 발주 완료(-) */
+  const monthlyNetAmount = useMemo(() => {
+    const completed = trades.filter(
+      (t) => t.status === 'COMPLETED' && isThisMonth(t.completedAt ?? t.createdAt),
+    );
+    const salesAmount = completed
+      .filter((t) => (t.seller.businessNumber ?? '').replace(/\D/g, '') === myBn)
+      .reduce((sum, t) => sum + (t.totalAmount ?? 0), 0);
+    const purchaseAmount = completed
+      .filter((t) => (t.buyer.businessNumber ?? '').replace(/\D/g, '') === myBn)
+      .reduce((sum, t) => sum + (t.totalAmount ?? 0), 0);
+    return salesAmount - purchaseAmount;
+  }, [trades, myBn]);
 
   // ── 거래 테이블 rows ────────────────────────────────────────────────────────
   const salesRows = useMemo<TransactionRow[]>(
@@ -171,7 +176,7 @@ export default function DashboardPage() {
           inProgressCount={inProgressCount}
           pendingCount={pendingCount}
           pendingPaymentAmount={pendingPaymentAmount}
-          monthlyAmount={monthlyAmount}
+          monthlyNetAmount={monthlyNetAmount}
         />
         <div className="grid gap-4 lg:grid-cols-[2fr_0.9fr]">
           <MonthlyGraph trades={trades} />

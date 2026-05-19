@@ -37,6 +37,27 @@ function normalizeCompanyType(value: unknown): 'CORPORATE' | 'INDIVIDUAL' {
   return 'INDIVIDUAL';
 }
 
+/** Spring @RequestPart MIME 검증용 — 브라우저가 type을 비워 둔 경우 보정 */
+function asPdfFile(file: File): File {
+  if (file.type === 'application/pdf') return file;
+  const name = file.name.toLowerCase().endsWith('.pdf') ? file.name : `${file.name}.pdf`;
+  return new File([file], name, { type: 'application/pdf', lastModified: file.lastModified });
+}
+
+function asBankbookImageFile(file: File): File {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const mime =
+    file.type === 'image/png' || ext === 'png'
+      ? 'image/png'
+      : 'image/jpeg';
+  const name =
+    ext === 'png' || ext === 'jpg' || ext === 'jpeg'
+      ? file.name
+      : `${file.name}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+  if (file.type === mime) return file;
+  return new File([file], name, { type: mime, lastModified: file.lastModified });
+}
+
 type FieldStatus = 'empty' | 'ok' | 'bad';
 
 function fieldStatusText(value: string, valid: boolean): FieldStatus {
@@ -86,7 +107,7 @@ export default function LoginInfoForm({
   onSubmitStateChange,
 }: LoginInfoFormProps) {
   const router = useRouter();
-  const { ocrExtracted, setSubmittedSignup } = useSignupDocumentFiles();
+  const { ocrExtracted, setSubmittedSignup, businessFile, bankbookFile } = useSignupDocumentFiles();
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -137,22 +158,41 @@ export default function LoginInfoForm({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      if (!businessFile || !bankbookFile) {
+        setSubmitError('서류 파일이 없습니다. 1단계에서 사업자등록증과 통장사본을 다시 업로드해 주세요.');
+        return;
+      }
+
       const companyType = normalizeCompanyType(
         (ocrExtracted as { companyType?: unknown } | null)?.companyType,
       );
-      const res = await apiClient.post('/api/v1/auth/signup', {
-          companyName: ocrExtracted.companyName,
-          businessType: ocrExtracted.businessType,
-          businessNumber: ocrExtracted.businessNumber,
-          ceoName: ocrExtracted.ceoName,
-          bank: ocrExtracted.bank,
-          account: ocrExtracted.account,
-          email: email.trim(),
-          password,
-          address: ocrExtracted.address,
-          phone,
-          companyType,
-      });
+
+      const signupPayload = {
+        companyName: ocrExtracted.companyName,
+        businessType: ocrExtracted.businessType,
+        businessNumber: ocrExtracted.businessNumber,
+        ceoName: ocrExtracted.ceoName,
+        bank: ocrExtracted.bank,
+        account: ocrExtracted.account,
+        email: email.trim(),
+        password,
+        address: ocrExtracted.address,
+        phone,
+        companyType,
+      };
+
+      const formData = new FormData();
+      formData.append(
+        'data',
+        new Blob([JSON.stringify(signupPayload)], { type: 'application/json' }),
+        'data.json',
+      );
+      const businessPdf = asPdfFile(businessFile);
+      const bankbookImage = asBankbookImageFile(bankbookFile);
+      formData.append('businessRegistration', businessPdf, businessPdf.name);
+      formData.append('bankbook', bankbookImage, bankbookImage.name);
+
+      const res = await apiClient.post('/api/v1/auth/signup', formData);
       if (res.status === 201) {
         try {
           const loginRes = await apiClient.post('/api/v1/auth/login', {
@@ -215,6 +255,10 @@ export default function LoginInfoForm({
           setSubmitError('이미 등록된 사업자번호입니다.');
         } else if (code === 'REQUEST_001') {
           setSubmitError(response?.data?.message ?? '요청 형식이 올바르지 않습니다.');
+        } else if (code === 'STORAGE_001') {
+          setSubmitError('업로드 파일이 비어 있습니다. 서류를 다시 업로드해 주세요.');
+        } else if (code === 'STORAGE_002') {
+          setSubmitError('지원하지 않는 파일 형식입니다. 사업자등록증은 PDF, 통장사본은 JPG/PNG만 가능합니다.');
         } else {
           setSubmitError(response?.data?.message ?? '회원가입 처리 중 오류가 발생했습니다.');
         }

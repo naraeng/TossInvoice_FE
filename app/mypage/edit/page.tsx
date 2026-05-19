@@ -27,7 +27,34 @@ type MyInfoApiResult = {
   address?: string;
   bank?: string;
   account?: string;
+  accountHolder?: string;
+  businessRegistrationUrl?: string;
+  bankbookUrl?: string;
+  businessRegistrationFileUrl?: string;
+  bankbookFileUrl?: string;
 };
+
+function pickDocumentUrls(result: MyInfoApiResult) {
+  return {
+    businessRegistrationUrl:
+      result.businessRegistrationUrl?.trim() ||
+      result.businessRegistrationFileUrl?.trim() ||
+      '',
+    bankbookUrl: result.bankbookUrl?.trim() || result.bankbookFileUrl?.trim() || '',
+  };
+}
+
+function asBankbookImageFile(file: File): File {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const mime =
+    file.type === 'image/png' || ext === 'png' ? 'image/png' : 'image/jpeg';
+  const name =
+    ext === 'png' || ext === 'jpg' || ext === 'jpeg'
+      ? file.name
+      : `${file.name}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+  if (file.type === mime) return file;
+  return new File([file], name, { type: mime, lastModified: file.lastModified });
+}
 
 type MyInfoApiResponse = {
   result?: MyInfoApiResult | null;
@@ -73,6 +100,9 @@ export default function MyPageEditPage() {
   const [ntsBlocking, setNtsBlocking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [businessRegistrationUrl, setBusinessRegistrationUrl] = useState('');
+  const [bankbookUrl, setBankbookUrl] = useState('');
+  const [bankbookFile, setBankbookFile] = useState<File | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,9 +115,16 @@ export default function MyPageEditPage() {
         const result = (res.data as MyInfoApiResponse)?.result;
         if (!result || cancelled) return;
         const normalized = normalizeMyInfoToProfile(result);
+        const urls = pickDocumentUrls(result);
         saveMemberProfile(normalized, isRememberLoginEnabled());
         if (!cancelled) {
-          setProfile((prev) => ({ ...prev, ...normalized }));
+          setProfile((prev) => ({
+            ...prev,
+            ...normalized,
+            accountHolder: result.accountHolder ?? prev.accountHolder,
+          }));
+          setBusinessRegistrationUrl(urls.businessRegistrationUrl);
+          setBankbookUrl(urls.bankbookUrl);
         }
       } catch {
         // keep fallback
@@ -122,8 +159,34 @@ export default function MyPageEditPage() {
     setNtsBlocking(isBlocking);
   }, []);
 
+  const documentProfile = useMemo(
+    () => ({
+      companyName: profile.companyName,
+      businessNumber: profile.businessNumber,
+      ceoName: profile.ceoName,
+      businessType: profile.businessType,
+      address: profile.address,
+      bank: profile.bank,
+      account: profile.account,
+      accountHolder: profile.accountHolder,
+      companyType: profile.companyType,
+    }),
+    [
+      profile.companyName,
+      profile.businessNumber,
+      profile.ceoName,
+      profile.businessType,
+      profile.address,
+      profile.bank,
+      profile.account,
+      profile.accountHolder,
+      profile.companyType,
+    ],
+  );
+
   const displayProfile = useMemo<MemberProfile>(() => {
     if (!ocrExtracted) return profile;
+    const useOcrBankAccount = Boolean(bankbookFile);
     return {
       ...profile,
       companyName: ocrExtracted.companyName || profile.companyName,
@@ -131,11 +194,11 @@ export default function MyPageEditPage() {
       ceoName: ocrExtracted.ceoName || profile.ceoName,
       businessType: ocrExtracted.businessType || profile.businessType,
       address: ocrExtracted.address || profile.address,
-      bank: ocrExtracted.bank || profile.bank,
-      account: ocrExtracted.account || profile.account,
-      accountHolder: ocrExtracted.accountHolder || profile.accountHolder,
+      bank: useOcrBankAccount ? ocrExtracted.bank : ocrExtracted.bank || profile.bank,
+      account: useOcrBankAccount ? ocrExtracted.account : ocrExtracted.account || profile.account,
+      accountHolder: ocrExtracted.accountHolder || profile.accountHolder || profile.ceoName,
     };
-  }, [profile, ocrExtracted]);
+  }, [profile, ocrExtracted, bankbookFile]);
 
   const onSave = async () => {
     setErrorMessage('');
@@ -157,36 +220,83 @@ export default function MyPageEditPage() {
       return;
     }
 
+    const bankToSave = (ocrExtracted?.bank || profile.bank).trim();
+    const accountToSave = (ocrExtracted?.account || profile.account).trim();
+    const bankAccountChanged =
+      bankToSave !== profile.bank.trim() || accountToSave !== profile.account.trim();
+
+    if (bankAccountChanged && !bankbookFile) {
+      setErrorMessage('은행·계좌번호 변경 시 통장사본을 새로 업로드해 주세요.');
+      return;
+    }
+
+    if (bankbookFile && (!bankToSave || !accountToSave)) {
+      setErrorMessage(
+        '통장사본에서 은행·계좌번호를 읽지 못했습니다. 선명한 이미지로 다시 업로드해 주세요.',
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const accountToSave = ocrExtracted?.account || profile.account;
-      await apiClient.patch('/api/v1/users/me/account', { account: accountToSave });
+      if (bankbookFile) {
+        const formData = new FormData();
+        formData.append(
+          'data',
+          new Blob(
+            [JSON.stringify({ bank: bankToSave, account: accountToSave })],
+            { type: 'application/json' },
+          ),
+          'data.json',
+        );
+        formData.append(
+          'bankbook',
+          asBankbookImageFile(bankbookFile),
+          bankbookFile.name,
+        );
+        await apiClient.patch('/api/v1/users/me/account', formData);
+      }
+
       if (password) {
         await apiClient.patch('/api/v1/users/me/password', { password });
       }
-      saveMemberProfile(
-        {
-          ...profile,
-          companyName: ocrExtracted?.companyName || profile.companyName,
-          businessNumber: ocrExtracted?.businessNumber || profile.businessNumber,
-          ceoName: ocrExtracted?.ceoName || profile.ceoName,
-          businessType: ocrExtracted?.businessType || profile.businessType,
-          address: ocrExtracted?.address || profile.address,
-          bank: ocrExtracted?.bank || profile.bank,
-          account: accountToSave,
-          accountHolder: ocrExtracted?.accountHolder || profile.accountHolder,
-        },
-        isRememberLoginEnabled(),
-      );
+
+      const meRes = await apiClient.get('/api/v1/users/me');
+      const meResult = (meRes.data as MyInfoApiResponse)?.result;
+      if (meResult) {
+        const fromApi = normalizeMyInfoToProfile(meResult);
+        const urls = pickDocumentUrls(meResult);
+        saveMemberProfile(
+          {
+            ...fromApi,
+            accountHolder: meResult.accountHolder ?? profile.accountHolder,
+          },
+          isRememberLoginEnabled(),
+        );
+        if (bankbookFile) {
+          setBankbookUrl(urls.bankbookUrl);
+        }
+      }
       router.push('/mypage');
     } catch (error: unknown) {
       if (typeof error === 'object' && error && 'response' in error) {
         const response = (
           error as {
-            response?: { data?: { message?: string } };
+            response?: { data?: { errorCode?: string; message?: string } };
           }
         ).response;
-        setErrorMessage(response?.data?.message ?? '회원정보 수정 중 오류가 발생했습니다.');
+        const code = response?.data?.errorCode;
+        if (code === 'REQUEST_001') {
+          setErrorMessage(response?.data?.message ?? '요청 형식이 올바르지 않습니다.');
+        } else if (code === 'STORAGE_001') {
+          setErrorMessage('업로드 파일이 비어 있습니다. 통장사본을 다시 업로드해 주세요.');
+        } else if (code === 'STORAGE_002') {
+          setErrorMessage('지원하지 않는 파일 형식입니다. 통장사본은 JPG/PNG만 가능합니다.');
+        } else if (code === 'USER_001') {
+          setErrorMessage(response?.data?.message ?? '사용자 정보를 찾을 수 없습니다.');
+        } else {
+          setErrorMessage(response?.data?.message ?? '회원정보 수정 중 오류가 발생했습니다.');
+        }
       } else {
         setErrorMessage('네트워크 오류가 발생했습니다.');
       }
@@ -209,9 +319,13 @@ export default function MyPageEditPage() {
           {/* 왼쪽: 등록된 서류 + 로그인 정보 */}
           <section className="min-w-0 space-y-8">
             <DocumentUploadSection
+              profile={documentProfile}
+              businessRegistrationUrl={businessRegistrationUrl}
+              bankbookUrl={bankbookUrl}
               onOcrGateChange={handleOcrGateChange}
               onOcrExtracted={handleOcrExtracted}
               onOcrBusyChange={handleOcrBusyChange}
+              onBankbookFileChange={setBankbookFile}
             />
             <EditableLoginInfoSection
               profile={profile}

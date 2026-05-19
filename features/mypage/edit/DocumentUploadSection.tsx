@@ -20,7 +20,7 @@ import {
   isNameIncludedInText,
   isSameCompanyName,
   parseBankbookText,
-  parseBusinessDocText,
+  sanitizeAccountHolder,
   toErrorMessage,
 } from './ocr';
 
@@ -74,13 +74,85 @@ function isImageFile(file: File): boolean {
   return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'heif'].includes(ext ?? '');
 }
 
+const ACCEPT_BANKBOOK = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
+
+function validateBankbookFile(file: File): string | null {
+  const mime = file.type.toLowerCase();
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (
+    mime.startsWith('image/jpeg') ||
+    mime.startsWith('image/png') ||
+    ext === 'jpg' ||
+    ext === 'jpeg' ||
+    ext === 'png'
+  ) {
+    return null;
+  }
+  return 'JPG 또는 PNG 이미지 파일만 업로드할 수 있어요.';
+}
+
+function isImageUrl(url: string): boolean {
+  return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url);
+}
+
+function isPdfUrl(url: string): boolean {
+  return /\.pdf(\?|$)/i.test(url);
+}
+
+export type MemberDocumentProfile = {
+  companyName: string;
+  businessNumber: string;
+  ceoName: string;
+  businessType: string;
+  address: string;
+  bank: string;
+  account: string;
+  accountHolder?: string;
+  companyType?: string;
+};
+
+function toCompanyType(value?: string): 'CORPORATE' | 'INDIVIDUAL' {
+  if (value === 'CORPORATE' || value === '법인') return 'CORPORATE';
+  return 'INDIVIDUAL';
+}
+
+function profileToExtracted(profile: MemberDocumentProfile, isNameMatched: boolean): OcrExtractedData {
+  return {
+    companyName: profile.companyName,
+    businessNumber: profile.businessNumber,
+    ceoName: profile.ceoName,
+    businessType: profile.businessType,
+    address: profile.address,
+    companyType: toCompanyType(profile.companyType),
+    bank: profile.bank,
+    account: profile.account,
+    accountHolder: profile.accountHolder || profile.ceoName,
+    isNameMatched,
+  };
+}
+
 type DocumentUploadSlotProps = {
   title: string;
   file: File | null;
-  onChange: (file: File | null) => void;
+  onChange?: (file: File | null) => void;
+  existingUrl?: string | null;
+  readOnly?: boolean;
+  accept?: string;
+  hintText?: string;
+  validateFile?: (file: File) => string | null;
 };
 
-function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) {
+function DocumentUploadSlot({
+  title,
+  file,
+  onChange,
+  existingUrl = null,
+  readOnly = false,
+  accept = ACCEPT_ATTR,
+  hintText = '이미지·PDF 업로드 가능 · 최대 10MB',
+  validateFile = (f) =>
+    isAllowedUpload(f) ? null : 'PNG, JPG, WEBP, GIF, HEIC, PDF 파일만 업로드할 수 있어요.',
+}: DocumentUploadSlotProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
   const dialogTitleId = useId();
@@ -88,8 +160,11 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
   const [error, setError] = useState<string | null>(null);
   const [failedPreviewKey, setFailedPreviewKey] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [urlDismissed, setUrlDismissed] = useState(false);
   const currentFileKey = file ? `${file.name}-${file.size}-${file.lastModified}` : null;
   const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  const showExisting = Boolean(existingUrl && !file && !urlDismissed);
+  const previewSrc = file ? objectUrl : showExisting ? existingUrl : null;
 
   useEffect(() => {
     if (!objectUrl) return;
@@ -116,25 +191,28 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
     (next: File | null) => {
       setError(null);
       if (!next) {
-        onChange(null);
+        onChange?.(null);
         return;
       }
-      if (!isAllowedUpload(next)) {
-        setError('PNG, JPG, WEBP, GIF, HEIC, PDF 파일만 업로드할 수 있어요.');
+      const validationError = validateFile(next);
+      if (validationError) {
+        setError(validationError);
         return;
       }
       if (next.size > MAX_BYTES) {
         setError('파일 크기는 최대 10MB까지 가능해요.');
         return;
       }
-      onChange(next);
+      setUrlDismissed(false);
+      onChange?.(next);
     },
-    [onChange],
+    [onChange, validateFile],
   );
 
   const openPicker = useCallback(() => {
+    if (readOnly) return;
     inputRef.current?.click();
-  }, []);
+  }, [readOnly]);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
@@ -174,21 +252,28 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
   };
 
   const handleReupload = () => {
-    onChange(null);
+    if (file) {
+      onChange?.(null);
+    } else {
+      setUrlDismissed(true);
+    }
     requestAnimationFrame(() => inputRef.current?.click());
   };
 
-  const complete = Boolean(file);
+  const complete = Boolean(file || showExisting);
   const showImageThumb =
-    complete && file && objectUrl && isImageFile(file) && failedPreviewKey !== currentFileKey;
-  const canOpenPreview = Boolean(complete && file && objectUrl);
+    complete &&
+    ((file && objectUrl && isImageFile(file) && failedPreviewKey !== currentFileKey) ||
+      (showExisting && existingUrl && isImageUrl(existingUrl)));
+  const canOpenPreview = Boolean(complete && previewSrc);
   const isPdf = Boolean(
-    file &&
-      (file.type === 'application/pdf' || file.name.split('.').pop()?.toLowerCase() === 'pdf'),
+    file
+      ? file.type === 'application/pdf' || file.name.split('.').pop()?.toLowerCase() === 'pdf'
+      : showExisting && existingUrl && isPdfUrl(existingUrl),
   );
 
   const previewModal =
-    previewOpen && file && objectUrl && typeof document !== 'undefined'
+    previewOpen && previewSrc && typeof document !== 'undefined'
       ? createPortal(
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
@@ -212,7 +297,9 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
                     {title} 미리보기
                   </p>
                   <p className="truncate text-xs text-slate-500">
-                    {file.name} · {formatFileSize(file.size)}
+                    {file
+                      ? `${file.name} · ${formatFileSize(file.size)}`
+                      : '가입 시 제출한 서류'}
                   </p>
                 </div>
                 <Button
@@ -229,16 +316,17 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
                 {isPdf ? (
                   <iframe
                     title={`${title} PDF`}
-                    src={objectUrl}
+                    src={previewSrc ?? undefined}
                     className="h-[min(78vh,720px)] w-full rounded-lg border border-slate-200 bg-white"
                   />
-                ) : isImageFile(file) && failedPreviewKey !== currentFileKey ? (
+                ) : (file && isImageFile(file) && failedPreviewKey !== currentFileKey) ||
+                  (showExisting && existingUrl && isImageUrl(existingUrl)) ? (
                   <div className="flex min-h-[min(78vh,720px)] items-center justify-center">
                     <img
-                      src={objectUrl}
+                      src={previewSrc ?? undefined}
                       alt={`${title} 전체 미리보기`}
                       className="max-h-[min(78vh,720px)] w-full max-w-full object-contain"
-                      onError={() => setFailedPreviewKey(currentFileKey)}
+                      onError={() => setFailedPreviewKey(currentFileKey ?? 'url')}
                     />
                   </div>
                 ) : (
@@ -262,11 +350,12 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
         ref={inputRef}
         type="file"
         className="sr-only"
-        accept={ACCEPT_ATTR}
+        accept={accept}
         onChange={handleInputChange}
+        disabled={readOnly}
       />
 
-      {complete && file ? (
+      {complete ? (
         <div
           className={cn(
             'flex min-h-[260px] flex-1 flex-col items-center justify-center rounded-xl border-2 border-emerald-500 bg-emerald-50/60 px-4 py-5 text-center sm:min-h-[280px] sm:px-6 sm:py-7',
@@ -275,17 +364,17 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
           {showImageThumb ? (
             <div className="mb-3 w-full overflow-hidden rounded-lg border border-emerald-200 bg-white shadow-sm">
               <img
-                src={objectUrl!}
+                src={previewSrc ?? undefined}
                 alt={`${title} 미리보기`}
                 className="mx-auto max-h-40 w-full object-contain sm:max-h-48"
-                onError={() => setFailedPreviewKey(currentFileKey)}
+                onError={() => setFailedPreviewKey(currentFileKey ?? 'url')}
               />
             </div>
           ) : null}
 
-          {complete && file && !showImageThumb ? (
+          {complete && !showImageThumb ? (
             <div className="mb-3 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
-              {isImageFile(file) && failedPreviewKey === currentFileKey ? (
+              {file && isImageFile(file) && failedPreviewKey === currentFileKey ? (
                 <FileText className="h-7 w-7 opacity-95" aria-hidden />
               ) : (
                 <Check className="h-7 w-7 stroke-[2.5]" aria-hidden />
@@ -299,9 +388,15 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
             </div>
           ) : null}
 
-          <p className="text-sm font-bold text-slate-900">{title} · 업로드 완료</p>
+          <p className="text-sm font-bold text-slate-900">
+            {title} · {readOnly ? '등록됨' : file ? '업로드 완료' : '등록된 서류'}
+          </p>
           <p className="mt-2 break-all text-xs font-medium text-slate-600">
-            {file.name} · {formatFileSize(file.size)}
+            {file
+              ? `${file.name} · ${formatFileSize(file.size)}`
+              : readOnly
+                ? '가입 시 제출 · 변경 불가'
+                : '가입 시 제출한 통장사본'}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Button
@@ -314,14 +409,20 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
             >
               보기
             </Button>
-            <button
-              type="button"
-              onClick={handleReupload}
-              className="text-sm font-semibold text-blue-600 underline-offset-2 hover:underline"
-            >
-              다시 업로드
-            </button>
+            {!readOnly ? (
+              <button
+                type="button"
+                onClick={handleReupload}
+                className="text-sm font-semibold text-blue-600 underline-offset-2 hover:underline"
+              >
+                다시 업로드
+              </button>
+            ) : null}
           </div>
+        </div>
+      ) : readOnly ? (
+        <div className="flex min-h-[260px] flex-1 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-7 text-center text-sm text-slate-500 sm:min-h-[280px]">
+          등록된 서류를 불러오지 못했습니다.
         </div>
       ) : (
         <div
@@ -348,7 +449,7 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
           <p className="mt-1 text-xs text-slate-500">
             파일을 끌어다 놓거나 클릭
             <br />
-            이미지·PDF 업로드 가능 · 최대 10MB
+            {hintText}
           </p>
           <Button
             type="button"
@@ -378,17 +479,24 @@ function DocumentUploadSlot({ title, file, onChange }: DocumentUploadSlotProps) 
 }
 
 export type DocumentUploadSectionProps = {
+  profile: MemberDocumentProfile;
+  businessRegistrationUrl?: string | null;
+  bankbookUrl?: string | null;
   onOcrGateChange?: (status: OcrGateStatus) => void;
   onOcrExtracted?: (data: OcrExtractedData | null) => void;
   onOcrBusyChange?: (busy: boolean) => void;
+  onBankbookFileChange?: (file: File | null) => void;
 };
 
 export default function DocumentUploadSection({
+  profile,
+  businessRegistrationUrl,
+  bankbookUrl,
   onOcrGateChange,
   onOcrExtracted,
   onOcrBusyChange,
+  onBankbookFileChange,
 }: DocumentUploadSectionProps) {
-  const [businessFile, setBusinessFile] = useState<File | null>(null);
   const [bankbookFile, setBankbookFile] = useState<File | null>(null);
   const [ocrExtracted, setOcrExtracted] = useState<OcrExtractedData | null>(null);
   const [mismatchModalOpen, setMismatchModalOpen] = useState(false);
@@ -397,15 +505,43 @@ export default function DocumentUploadSection({
   const mismatchModalTitleId = useId();
   const ocrRunIdRef = useRef(0);
   const prevOcrStatusRef = useRef<OcrGateStatus>('idle');
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
+  const hasAppliedExistingBankbookRef = useRef(false);
 
-  const runOcrPipeline = useCallback(
-    (nextBusinessFile: File | null, nextBankbookFile: File | null) => {
-      if (!nextBusinessFile || !nextBankbookFile) {
+  const applyMatchedFromProfile = useCallback(() => {
+    const extracted = profileToExtracted(profileRef.current, true);
+    setOcrExtracted(extracted);
+    onOcrExtracted?.(extracted);
+    onOcrGateChange?.('matched');
+    prevOcrStatusRef.current = 'matched';
+    setMismatchModalOpen(false);
+  }, [onOcrExtracted, onOcrGateChange]);
+
+  useEffect(() => {
+    if (!profile.companyName || !bankbookUrl) {
+      hasAppliedExistingBankbookRef.current = false;
+      return;
+    }
+    if (hasAppliedExistingBankbookRef.current) return;
+    hasAppliedExistingBankbookRef.current = true;
+    applyMatchedFromProfile();
+  }, [profile.companyName, bankbookUrl, applyMatchedFromProfile]);
+
+  const runBankbookOcr = useCallback(
+    (nextBankbookFile: File | null) => {
+      onBankbookFileChange?.(nextBankbookFile);
+
+      if (!nextBankbookFile) {
+        if (bankbookUrl && profile.companyName) {
+          applyMatchedFromProfile();
+          setOcrError(null);
+          return;
+        }
         ocrRunIdRef.current += 1;
         setOcrBusy(false);
         onOcrBusyChange?.(false);
         setOcrError(null);
-        setMismatchModalOpen(false);
         setOcrExtracted(null);
         onOcrExtracted?.(null);
         onOcrGateChange?.('idle');
@@ -422,32 +558,24 @@ export default function DocumentUploadSection({
 
       void (async () => {
         try {
-          const [businessText, bankbookText] = await Promise.all([
-            extractTextFromFile(nextBusinessFile),
-            extractTextFromFile(nextBankbookFile),
-          ]);
+          const bankbookText = await extractTextFromFile(nextBankbookFile);
           if (ocrRunIdRef.current !== runId) return;
 
-          const business = parseBusinessDocText(businessText);
           const bankbook = parseBankbookText(bankbookText);
-          const accountHolderOrRaw = bankbook.accountHolder || bankbookText;
+          const accountHolder = sanitizeAccountHolder(bankbook.accountHolder);
+          const accountHolderOrRaw = accountHolder || bankbookText;
           const isNameMatched =
-            isSameCompanyName(business.companyName, accountHolderOrRaw) ||
-            isSameCompanyName(business.ceoName, accountHolderOrRaw) ||
-            isNameIncludedInText(business.companyName, bankbookText) ||
-            isNameIncludedInText(business.ceoName, bankbookText);
+            isSameCompanyName(profile.companyName, accountHolderOrRaw) ||
+            isSameCompanyName(profile.ceoName, accountHolderOrRaw) ||
+            isNameIncludedInText(profile.companyName, bankbookText) ||
+            isNameIncludedInText(profile.ceoName, bankbookText);
           const status: OcrGateStatus = isNameMatched ? 'matched' : 'mismatched';
 
           const extracted: OcrExtractedData = {
-            companyName: business.companyName,
-            businessNumber: business.businessNumber,
-            ceoName: business.ceoName,
-            businessType: business.businessType,
-            address: business.address,
-            companyType: business.companyType,
+            ...profileToExtracted(profile, isNameMatched),
             bank: bankbook.bank,
             account: bankbook.account,
-            accountHolder: bankbook.accountHolder,
+            accountHolder: accountHolder || profile.ceoName,
             isNameMatched,
           };
           setOcrExtracted(extracted);
@@ -475,23 +603,23 @@ export default function DocumentUploadSection({
         }
       })();
     },
-    [onOcrGateChange, onOcrExtracted, onOcrBusyChange],
-  );
-
-  const handleBusinessFileChange = useCallback(
-    (next: File | null) => {
-      setBusinessFile(next);
-      runOcrPipeline(next, bankbookFile);
-    },
-    [bankbookFile, runOcrPipeline],
+    [
+      applyMatchedFromProfile,
+      bankbookUrl,
+      onBankbookFileChange,
+      onOcrBusyChange,
+      onOcrExtracted,
+      onOcrGateChange,
+      profile,
+    ],
   );
 
   const handleBankbookFileChange = useCallback(
     (next: File | null) => {
       setBankbookFile(next);
-      runOcrPipeline(businessFile, next);
+      runBankbookOcr(next);
     },
-    [businessFile, runOcrPipeline],
+    [runBankbookOcr],
   );
 
   useEffect(() => {
@@ -533,7 +661,7 @@ export default function DocumentUploadSection({
                     서류 정보 불일치
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    업로드하신 사업자등록증과 통장사본이 일치하지 않습니다.
+                    통장사본 예금주 정보가 등록된 사업자 정보와 일치하지 않습니다.
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-500">
                     예금주 정보와 사업자 상호/대표자명이 다를 수 있어요. 서류를 확인한 뒤 다시
@@ -560,20 +688,26 @@ export default function DocumentUploadSection({
         <div className="mb-5">
           <h2 className="text-lg font-bold text-slate-900">등록된 서류</h2>
           <p className="mt-1 text-sm text-slate-500">
-            가입 시 제출한 서류입니다 · 자동 검증 완료
+            사업자등록증은 보기만 가능 · 통장사본은 변경 시 재검증됩니다
           </p>
         </div>
 
         <div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-7 lg:gap-8">
           <DocumentUploadSlot
             title="사업자등록증"
-            file={businessFile}
-            onChange={handleBusinessFileChange}
+            file={null}
+            readOnly
+            existingUrl={businessRegistrationUrl}
+            hintText="PDF · 가입 시 제출"
           />
           <DocumentUploadSlot
             title="통장사본"
             file={bankbookFile}
+            existingUrl={bankbookUrl}
             onChange={handleBankbookFileChange}
+            accept={ACCEPT_BANKBOOK}
+            hintText="JPG 또는 PNG · 최대 10MB"
+            validateFile={validateBankbookFile}
           />
         </div>
 
