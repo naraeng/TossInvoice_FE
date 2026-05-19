@@ -9,8 +9,17 @@ import { logout } from '@/features/auth/logout';
 import BrandLogo from '@/components/layout/BrandLogo';
 import HeaderShell from '@/components/layout/HeaderShell';
 import { Button } from '@/components/ui/button';
-import { getDisplayProfile } from '@/lib/auth-user';
+import { apiClient } from '@/lib/api';
+import { isRememberLoginEnabled } from '@/lib/auth-storage';
+import { getDisplayProfile, saveMemberProfile } from '@/lib/auth-user';
 import { useNotifications } from '@/lib/use-notifications';
+
+type MyInfoResponse = {
+  result?: {
+    companyName?: string;
+    ceoName?: string;
+  } | null;
+};
 
 const navItems = [
   { label: '홈', href: '/dashboard', match: '/dashboard' },
@@ -27,7 +36,30 @@ export default function MemberHeader() {
   }));
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const sentinelRef = useRef<HTMLLIElement>(null);
   const { notices, loading: notifLoading, hasNext, loadingMore, loadMore } = useNotifications();
+
+  // 무한 스크롤: 드롭다운 안 sentinel 이 보이면 loadMore
+  useEffect(() => {
+    if (!notifOpen || !hasNext) return;
+    const root = listRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            loadMore();
+          }
+        }
+      },
+      { root, rootMargin: '40px', threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [notifOpen, hasNext, loadMore, notices.length]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -46,11 +78,30 @@ export default function MemberHeader() {
   }, []);
 
   useEffect(() => {
-    const nextProfile = getDisplayProfile();
+    // 1) 캐시된 값으로 즉시 표시
+    const cached = getDisplayProfile();
     setProfile({
-      companyName: nextProfile.companyName,
-      ceoName: nextProfile.ceoName,
+      companyName: cached.companyName,
+      ceoName: cached.ceoName,
     });
+
+    // 2) /users/me 로 최신 값 가져와서 갱신 + 저장 (다른 페이지 의존 없이 자체적으로)
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiClient.get('/api/v1/users/me');
+        if (cancelled) return;
+        const me = (res.data as MyInfoResponse)?.result;
+        const companyName = me?.companyName ?? '';
+        const ceoName = me?.ceoName ?? '';
+        if (!companyName && !ceoName) return;
+        setProfile({ companyName, ceoName });
+        saveMemberProfile({ companyName, ceoName }, isRememberLoginEnabled());
+      } catch {
+        // 토큰 만료 등 — 캐시 값 유지
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const companyLabel = profile.companyName || '내 회사';
@@ -111,58 +162,50 @@ export default function MemberHeader() {
               <div className="border-b border-slate-100 px-4 py-3">
                 <span className="text-sm font-bold text-slate-900">알림</span>
               </div>
-              <ul className="max-h-[420px] divide-y divide-slate-50 overflow-y-auto">
+              <ul ref={listRef} className="max-h-[420px] divide-y divide-slate-50 overflow-y-auto">
                 {notifLoading ? (
                   <li className="px-4 py-6 text-center text-xs text-slate-400">불러오는 중...</li>
                 ) : notices.length === 0 ? (
                   <li className="px-4 py-6 text-center text-xs text-slate-400">새 알림이 없습니다.</li>
                 ) : (
-                  notices.map((n) => (
-                    <li
-                      key={n.id}
-                      className="flex items-start gap-3 px-4 py-3.5 transition hover:bg-slate-50"
-                    >
-                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                        n.icon === 'alert' ? 'bg-red-100 text-red-500' :
-                        n.icon === 'check' ? 'bg-emerald-100 text-emerald-600' :
-                        'bg-slate-100 text-slate-500'
-                      }`}>
-                        {n.icon === 'alert' && <AlertCircle className="h-3.5 w-3.5" />}
-                        {n.icon === 'check' && <CheckCircle2 className="h-3.5 w-3.5" />}
-                        {n.icon === 'info' && <Info className="h-3.5 w-3.5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-slate-900">{n.title}</p>
-                        <p className="mt-0.5 truncate text-xs text-slate-400">{n.desc}</p>
-                        {(n.senderCompanyName ?? n.tradeTotalAmount) ? (
-                          <p className="mt-0.5 text-[11px] text-slate-400">
-                            {n.senderCompanyName && (
-                              <span className="font-medium text-slate-500">{n.senderCompanyName}</span>
-                            )}
-                            {n.senderCompanyName && n.tradeTotalAmount ? ' · ' : ''}
-                            {n.tradeTotalAmount !== null && (
-                              <span>{n.tradeTotalAmount.toLocaleString('ko-KR')}원</span>
-                            )}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 text-[11px] text-slate-300">{n.time}</span>
-                    </li>
-                  ))
+                  <>
+                    {notices.map((n) => (
+                      <li
+                        key={n.id}
+                        className="flex items-start gap-3 px-4 py-3.5 transition hover:bg-slate-50"
+                      >
+                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                          n.icon === 'alert' ? 'bg-red-100 text-red-500' :
+                          n.icon === 'check' ? 'bg-emerald-100 text-emerald-600' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>
+                          {n.icon === 'alert' && <AlertCircle className="h-3.5 w-3.5" />}
+                          {n.icon === 'check' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                          {n.icon === 'info' && <Info className="h-3.5 w-3.5" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-900">{n.title}</p>
+                          <p className="mt-0.5 whitespace-normal break-words text-xs text-slate-400">{n.desc}</p>
+                          {n.senderCompanyName && (
+                            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                              {n.senderCompanyName}
+                            </p>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[11px] text-slate-300">{n.time}</span>
+                      </li>
+                    ))}
+                    {hasNext && (
+                      <li
+                        ref={sentinelRef}
+                        className="px-4 py-3 text-center text-[11px] text-slate-400"
+                      >
+                        {loadingMore ? '불러오는 중...' : ''}
+                      </li>
+                    )}
+                  </>
                 )}
               </ul>
-              {hasNext && (
-                <div className="border-t border-slate-100 px-4 py-2.5">
-                  <button
-                    type="button"
-                    disabled={loadingMore}
-                    onClick={loadMore}
-                    className="w-full rounded-lg py-1.5 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {loadingMore ? '불러오는 중...' : '더 보기'}
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

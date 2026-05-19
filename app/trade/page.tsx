@@ -1,13 +1,19 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import PageContainer from '@/components/layout/PageContainer';
 import TradeBoard from '@/features/trade/TradeBoard';
 import TradeHeader from '@/features/trade/TradeHeader';
 import { apiClient } from '@/lib/api';
-import type { TradeApiRow, TradePageResponse } from '@/features/trade/types';
+import type {
+  TradeApiRow,
+  TradePageResponse,
+  TradePhase,
+  TradeRole,
+} from '@/features/trade/types';
 
 type TradeResponse = {
   result?: TradePageResponse | null;
@@ -15,25 +21,35 @@ type TradeResponse = {
 
 const PAGE_SIZE = 5;
 
-export default function TradePage() {
-  const [trades, setTrades] = useState<TradeApiRow[]>([]);
+function TradePageInner() {
+  const searchParams = useSearchParams();
+  const initialRole: TradeRole = searchParams.get('tab') === 'purchase' ? 'BUYER' : 'SELLER';
+
+  const [activeRole, setActiveRole] = useState<TradeRole>(initialRole);
+  const [activePhase, setActivePhase] = useState<TradePhase>('ACTIVE');
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [trades, setTrades] = useState<TradeApiRow[]>([]);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalElements, setTotalElements] = useState(0);
+  const [totalPartners, setTotalPartners] = useState(0);
+  const [activePartners, setActivePartners] = useState(0);
+  const [newPartnersThisMonth, setNewPartnersThisMonth] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchTrades = useCallback(
-    async (page: number) => {
+    async (role: TradeRole, phase: TradePhase, page: number) => {
       setLoading(true);
       try {
         const tradesRes = await apiClient.get(
-          `/api/v1/trades?page=${page}&size=${PAGE_SIZE}`,
+          `/api/v1/trades?role=${role}&phase=${phase}&page=${page}&size=${PAGE_SIZE}`,
         );
         const pageData = (tradesRes.data as TradeResponse).result;
         setTrades(pageData?.trades ?? []);
         setCurrentPage(pageData?.currentPage ?? page);
         setTotalPages(pageData?.totalPages ?? 1);
-        setTotalElements(pageData?.totalElements ?? 0);
+        setTotalPartners(pageData?.totalPartners ?? 0);
+        setActivePartners(pageData?.activePartners ?? 0);
+        setNewPartnersThisMonth(pageData?.newPartnersThisMonth ?? 0);
       } catch {
         setTrades([]);
       } finally {
@@ -43,48 +59,44 @@ export default function TradePage() {
     [],
   );
 
+  // role/phase/page 변경 시 재호출
   useEffect(() => {
-    fetchTrades(1);
-  }, [fetchTrades]);
+    fetchTrades(activeRole, activePhase, currentPage);
+  }, [fetchTrades, activeRole, activePhase, currentPage]);
 
-  const handlePageChange = (page: number) => {
-    if (page < 1 || page > totalPages || loading) return;
-    setCurrentPage(page);
-    fetchTrades(page);
+  const handleRoleChange = (role: TradeRole) => {
+    if (role === activeRole || loading) return;
+    setActiveRole(role);
+    setCurrentPage(1);
   };
 
-  // 현재 페이지 기준 통계 (서버가 분리된 집계 API를 제공하지 않으므로 현재 페이지 데이터로 계산)
-  const inProgressCount = useMemo(
-    () => trades.filter((trade) => trade.status !== 'COMPLETED' && trade.status !== 'CANCELLED').length,
-    [trades],
-  );
-  const completedCount = useMemo(
-    () => trades.filter((trade) => trade.status === 'COMPLETED').length,
-    [trades],
-  );
-  // trade.role이 API가 내려준 내 역할이므로 사업자번호 비교 불필요
-  const counterparties = useMemo(
-    () =>
-      new Set(
-        trades.map((trade) =>
-          trade.role === 'SELLER' ? trade.buyer.userId : trade.seller.userId,
-        ),
-      ).size,
-    [trades],
-  );
+  const handlePhaseChange = (phase: TradePhase) => {
+    if (phase === activePhase || loading) return;
+    setActivePhase(phase);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage || loading) return;
+    setCurrentPage(page);
+  };
 
   return (
     <div className="bg-white text-slate-900">
       <PageContainer className="flex flex-col gap-4 pb-16 pt-8">
         <TradeHeader
-          totalCounterparties={counterparties}
-          inProgressCount={inProgressCount}
-          completedCount={completedCount}
-          totalElements={totalElements}
+          totalPartners={totalPartners}
+          activePartners={activePartners}
+          newPartnersThisMonth={newPartnersThisMonth}
         />
-        <Suspense>
-          <TradeBoard trades={trades} loading={loading} />
-        </Suspense>
+        <TradeBoard
+          trades={trades}
+          activeRole={activeRole}
+          activePhase={activePhase}
+          onRoleChange={handleRoleChange}
+          onPhaseChange={handlePhaseChange}
+          loading={loading}
+        />
 
         {/* 페이지네이션 */}
         {totalPages > 1 && (
@@ -128,5 +140,13 @@ export default function TradePage() {
         )}
       </PageContainer>
     </div>
+  );
+}
+
+export default function TradePage() {
+  return (
+    <Suspense>
+      <TradePageInner />
+    </Suspense>
   );
 }

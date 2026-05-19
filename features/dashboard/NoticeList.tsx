@@ -29,7 +29,7 @@ function NoticeIconBadge({ icon }: { icon: NoticeIcon }) {
 
 export default function NoticeList() {
   const { notices, loading } = useNotifications();
-  const preview = notices.slice(0, 5);
+  const preview = notices.slice(0, 3);
 
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -51,7 +51,12 @@ export default function NoticeList() {
               <NoticeIconBadge icon={n.icon} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">{n.title}</p>
-                <p className="mt-0.5 truncate text-xs text-slate-400">{n.desc}</p>
+                <p className="mt-0.5 whitespace-normal break-words text-xs text-slate-400">{n.desc}</p>
+                {n.senderCompanyName && (
+                  <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                    {n.senderCompanyName}
+                  </p>
+                )}
               </div>
               <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-300">{n.time}</span>
             </li>

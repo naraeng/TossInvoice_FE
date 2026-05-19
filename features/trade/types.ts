@@ -1,4 +1,5 @@
 export type TradeRole = 'SELLER' | 'BUYER';
+export type TradePhase = 'ACTIVE' | 'COMPLETED';
 
 export type TradeCompanyMini = {
   userId: number;
@@ -25,4 +26,7 @@ export type TradePageResponse = {
   currentPage: number;
   totalPages: number;
   totalElements: number;
+  totalPartners: number;
+  activePartners: number;
+  newPartnersThisMonth: number;
 };

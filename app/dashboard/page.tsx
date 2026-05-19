@@ -66,15 +66,18 @@ export default function DashboardPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const [tradesRes, meRes, homeRes] = await Promise.all([
-          apiClient.get('/api/v1/trades?page=1&size=5'),
+        const [sellerRes, buyerRes, meRes, homeRes] = await Promise.all([
+          apiClient.get('/api/v1/trades?role=SELLER&phase=ACTIVE&page=1&size=5'),
+          apiClient.get('/api/v1/trades?role=BUYER&phase=ACTIVE&page=1&size=5'),
           apiClient.get('/api/v1/users/me'),
           apiClient.get('/api/v1/dashboard/home'),
         ]);
         if (cancelled) return;
 
-        // 거래 목록 (미리보기 테이블용)
-        const fetched = (tradesRes.data as TradeResponse).result?.trades ?? [];
+        // 거래 목록 (미리보기 테이블용) — SELLER ACTIVE + BUYER ACTIVE 합쳐서 사용
+        const sellerTrades = (sellerRes.data as TradeResponse).result?.trades ?? [];
+        const buyerTrades = (buyerRes.data as TradeResponse).result?.trades ?? [];
+        const fetched = [...sellerTrades, ...buyerTrades];
 
         // 내 정보
         const meResult = (meRes.data as MyInfoResponse)?.result;

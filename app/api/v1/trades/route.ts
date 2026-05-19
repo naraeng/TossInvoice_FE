@@ -8,10 +8,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const upstreamUrl = new URL(`${BACKEND_BASE_URL}/api/v1/trades`);
-  const page = searchParams.get('page');
-  const size = searchParams.get('size');
-  if (page !== null) upstreamUrl.searchParams.set('page', page);
-  if (size !== null) upstreamUrl.searchParams.set('size', size);
+  for (const key of ['role', 'phase', 'page', 'size'] as const) {
+    const value = searchParams.get(key);
+    if (value !== null) upstreamUrl.searchParams.set(key, value);
+  }
 
   let upstream: Response;
   try {
