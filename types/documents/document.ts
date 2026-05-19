@@ -61,11 +61,19 @@ export interface TransactionTerms {
 
 export interface QuoteDocument {
   id: string;
+  /** POST /api/v1/trades 성공 시 생성된 거래 ID */
+  tradeId?: number;
   documentNo: string;
   status: QuoteStatus;
   issuedAt: string;
   validityUntil?: string;
+  /** 제작 소요일 (API: productionDays, ≥1) */
+  productionDays?: number;
+  /** 결제 완료 기한 — 납품 후 N일 */
+  paymentDueDays?: number;
   paymentTerms?: string;
+  /** 선금 비율 (0–100). 미지정 시 paymentTerms 또는 기본 30% */
+  downPaymentPercent?: number;
   supplier: DocumentUser;
   client: DocumentUser;
   supplierProfile?: CompanyProfile;

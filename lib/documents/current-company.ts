@@ -1,6 +1,3 @@
-// 로그인 전 mock -> 추후 세션 / 쿠키로 교체
-// 수주처: company-supplier-1 | 발주처: client-narae
-// export const CURRENT_COMPANY_ID = 'company-supplier-1';
-export const CURRENT_COMPANY_ID = 'client-narae';
-// export const CURRENT_COMPANY_NAME = '(주)장규식자재';
-export const CURRENT_COMPANY_NAME = '날애커피';
+// resolve 실패 시 최후 fallback (실제 역할은 /users/me 기준)
+export const CURRENT_COMPANY_ID = 'company-supplier-1';
+export const CURRENT_COMPANY_NAME = '(주)장규식자재';

@@ -5,7 +5,9 @@ import { SupplierQuoteDraftScreen } from './SupplierQuoteDraftScreen';
 import { SupplierQuoteIssuedScreen } from './SupplierQuoteIssuedScreen';
 import { SupplierQuotePoConfirmedScreen } from './SupplierQuotePoConfirmedScreen';
 import { SupplierQuotePoIssuedScreen } from './SupplierQuotePoIssuedScreen';
-import type { MockClient } from './constants';
+import type { QuoteSchedule } from '@/lib/documents/schedule';
+
+import type { ClientCompany } from './constants';
 
 type Props = {
   quote: QuoteDocument;
@@ -13,7 +15,9 @@ type Props = {
   showSignature: boolean;
   lastSavedLabel?: string;
   onItemsChange?: (items: QuoteDocument['items']) => void;
-  onClientChange?: (client: MockClient) => void;
+  onClientChange?: (client: ClientCompany) => void;
+  onDownPaymentPercentChange?: (percent: number) => void;
+  onScheduleChange?: (patch: Partial<QuoteSchedule>) => void;
   onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
@@ -24,6 +28,8 @@ export function SupplierQuoteScreen({
   lastSavedLabel,
   onItemsChange,
   onClientChange,
+  onDownPaymentPercentChange,
+  onScheduleChange,
   onSignatureChange,
 }: Props) {
   if (quote.status === 'ISSUED') {
@@ -49,13 +55,22 @@ export function SupplierQuoteScreen({
     );
   }
 
-  if (quote.status === 'DRAFT' && editable && onItemsChange && onClientChange) {
+  if (
+    quote.status === 'DRAFT' &&
+    editable &&
+    onItemsChange &&
+    onClientChange &&
+    onDownPaymentPercentChange &&
+    onScheduleChange
+  ) {
     return (
       <SupplierQuoteDraftScreen
         quote={quote}
         lastSavedLabel={lastSavedLabel}
         onItemsChange={onItemsChange}
         onClientChange={onClientChange}
+        onDownPaymentPercentChange={onDownPaymentPercentChange}
+        onScheduleChange={onScheduleChange}
         onSignatureChange={onSignatureChange}
       />
     );

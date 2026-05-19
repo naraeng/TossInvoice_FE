@@ -1,9 +1,10 @@
+import { SignatureVisual } from '@/features/documents/quote/shared/SignatureVisual';
 import {
   DEFAULT_CLIENT_PROFILE,
   DEFAULT_SUPPLIER_PROFILE,
 } from '@/lib/documents/enrich-issued-quote';
-
 import { formatKRW } from '@/lib/documents/format';
+import { getPiSupplierSignature } from '@/lib/documents/signature-utils';
 import type { CompanyProfile } from '@/types/documents/company';
 import type { QuoteDocument } from '@/types/documents/document';
 
@@ -49,9 +50,7 @@ type Props = {
 export function ProformaInvoiceDocument({ quote }: Props) {
   const supplier = quote.supplierProfile ?? DEFAULT_SUPPLIER_PROFILE;
   const client = quote.clientProfile ?? DEFAULT_CLIENT_PROFILE;
-  const supplierSignature = quote.signatures.find(
-    (s) => s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope)
-  );
+  const supplierSignature = getPiSupplierSignature(quote);
   const paymentTerms = quote.paymentTerms ?? '선금 30% / 잔금 70%';
   const validity = quote.validityUntil
     ? `${formatDisplayDate(quote.validityUntil)}까지`
@@ -157,7 +156,7 @@ export function ProformaInvoiceDocument({ quote }: Props) {
             <dt className="text-[#8E8E8E]">부가세 (10%)</dt>
             <dd className="tabular-nums text-[#191919]">{formatAmount(quote.totals.tax)}</dd>
           </div>
-          <div className="mt-3 border-t border-[#B3D4FF] pt-4">
+          <div className="mt-3 border-t border-slate-200 pt-4">
             <div className="flex items-baseline justify-between gap-8">
               <dt className="text-sm font-bold text-[#191919]">총 결제 금액</dt>
               <dd className="text-2xl font-bold tabular-nums text-[#3182F6]">
@@ -187,13 +186,20 @@ export function ProformaInvoiceDocument({ quote }: Props) {
         <p className="mt-1 text-xs text-[#8E8E8E]">
           전자서명법에 따라 본 문서의 서명은 법적 효력을 가집니다.
         </p>
-        <div className="mt-4 rounded-lg bg-[#F8F9FA] px-6 py-12 text-center">
+        <div className="mt-4 rounded-lg bg-[#F8F9FA] px-6 py-6">
           <p className="text-xs text-[#8E8E8E]">{quote.supplier.companyName}</p>
-          <p className="mt-4 font-serif text-[34px] leading-none text-[#555555]">
-            {supplierSignature?.signerName ?? supplier.representative.replace(' 대표', '')}
+          <p className="mt-1 text-sm font-semibold text-[#191919]">
+            {supplierSignature?.signerName ?? supplier.representative.replace(/\s*대표\s*$/, '')}
           </p>
+          <div className="mt-4 flex min-h-28 items-center justify-center rounded-lg bg-white px-4 py-6">
+            <SignatureVisual
+              signature={supplierSignature}
+              fallbackName={supplier.representative.replace(/\s*대표\s*$/, '')}
+              className="max-h-32 w-auto max-w-full object-contain"
+            />
+          </div>
           {supplierSignature && (
-            <p className="mt-8 text-left text-[10px] text-[#8E8E8E]">
+            <p className="mt-4 text-[10px] text-[#8E8E8E]">
               서명 일시: {new Date(supplierSignature.signedAt).toLocaleString('ko-KR')}
               {supplierSignature.ipAddress && ` · IP ${supplierSignature.ipAddress}`}
             </p>

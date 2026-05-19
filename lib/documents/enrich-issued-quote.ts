@@ -1,3 +1,4 @@
+import { formatDeliveryScheduleSummary, resolveQuoteSchedule } from '@/lib/documents/schedule';
 import type { CompanyProfile } from '@/types/documents/company';
 import type { QuoteDocument } from '@/types/documents/document';
 
@@ -17,12 +18,6 @@ export const DEFAULT_CLIENT_PROFILE: CompanyProfile = {
   verified: true,
 };
 
-function addDaysIso(isoDate: string, days: number) {
-  const d = new Date(isoDate);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 function buildDocumentNo(issuedAt: string, existing?: string) {
   if (existing?.startsWith('PI-')) return existing;
   const compact = issuedAt.replace(/-/g, '');
@@ -32,6 +27,8 @@ function buildDocumentNo(issuedAt: string, existing?: string) {
 /** DRAFT → ISSUED 전환 시 PI 문서 필드 보강 */
 export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
   const issuedAt = quote.issuedAt || new Date().toISOString().slice(0, 10);
+  const schedule = resolveQuoteSchedule(quote);
+  const deliverySummary = formatDeliveryScheduleSummary(schedule);
   const hasSupplierSig = quote.signatures.some(
     (s) => s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope)
   );
@@ -41,14 +38,19 @@ export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
     status: 'ISSUED',
     issuedAt,
     documentNo: buildDocumentNo(issuedAt, quote.documentNo),
-    validityUntil: quote.validityUntil ?? addDaysIso(issuedAt, 7),
+    validityUntil: quote.validityUntil,
+    productionDays: quote.productionDays,
+    paymentDueDays: quote.paymentDueDays,
     paymentTerms: quote.paymentTerms ?? '선금 30% / 잔금 70%',
     bankVerified: quote.bankVerified ?? true,
     supplierProfile: quote.supplierProfile ?? DEFAULT_SUPPLIER_PROFILE,
     clientProfile: quote.clientProfile ?? DEFAULT_CLIENT_PROFILE,
     transactionTerms: quote.transactionTerms ?? {
       paymentMethod: '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
-      deliverySchedule: '2026.05.25 (월) — 결제 후 7일 이내',
+      deliverySchedule:
+        deliverySummary ??
+        quote.transactionTerms?.deliverySchedule ??
+        '발주처와 일정 합의 후 반영',
     },
     signatures: hasSupplierSig
       ? quote.signatures
@@ -58,7 +60,8 @@ export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
             party: 'SUPPLIER',
             scope: 'PI',
             signedAt: new Date().toISOString(),
-            signerName: quote.supplierProfile?.representative ?? '박장규',
+            signerName:
+              quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규',
             ipAddress: '203.241.128.45',
           },
         ],

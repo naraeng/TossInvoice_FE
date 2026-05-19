@@ -60,7 +60,32 @@ async function reissueAccessToken(): Promise<string | null> {
   }
 }
 
+function deleteContentTypeHeader(headers: unknown) {
+  if (!headers) return;
+
+  if (typeof (headers as { delete?: (k: string) => void }).delete === 'function') {
+    (headers as { delete: (k: string) => void }).delete('Content-Type');
+    (headers as { delete: (k: string) => void }).delete('content-type');
+    return;
+  }
+
+  delete (headers as Record<string, unknown>)['Content-Type'];
+  delete (headers as Record<string, unknown>)['content-type'];
+}
+
 apiClient.interceptors.request.use((config) => {
+  const method = config.method?.toLowerCase();
+
+  // GET에 application/json이 붙으면 Spring이 400을 반환하는 경우가 있음
+  if (method === 'get' || method === 'head' || method === 'delete') {
+    deleteContentTypeHeader(config.headers);
+  }
+
+  // FormData는 Content-Type을 브라우저/axios가 boundary 포함해 설정해야 함
+  if (config.data instanceof FormData) {
+    deleteContentTypeHeader(config.headers);
+  }
+
   const accessToken = getAccessToken();
   if (accessToken) {
     config.headers = config.headers ?? {};

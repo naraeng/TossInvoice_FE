@@ -45,3 +45,54 @@ export async function GET(request: Request) {
     },
   });
 }
+
+/** PI(견적서) 발행 — multipart/form-data (`data` + `signature`) */
+export async function POST(request: Request) {
+  const authorization = request.headers.get('authorization');
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ message: 'Invalid multipart body.' }, { status: 400 });
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${BACKEND_BASE_URL}/api/v1/trades`, {
+      method: 'POST',
+      headers: {
+        ...(authorization ? { Authorization: authorization } : {}),
+      },
+      body: formData,
+    });
+  } catch {
+    return NextResponse.json(
+      { message: 'Failed to reach backend server.' },
+      { status: 502 },
+    );
+  }
+
+  const bodyText = await upstream.text();
+  const contentType = upstream.headers.get('content-type') ?? '';
+  const isJson = contentType.includes('application/json');
+
+  if (isJson) {
+    try {
+      const parsed = JSON.parse(bodyText) as unknown;
+      return NextResponse.json(parsed, { status: upstream.status });
+    } catch {
+      return NextResponse.json(
+        { message: bodyText || 'Invalid JSON response from backend.' },
+        { status: upstream.status },
+      );
+    }
+  }
+
+  return new NextResponse(bodyText, {
+    status: upstream.status,
+    headers: {
+      'content-type': contentType || 'text/plain; charset=utf-8',
+    },
+  });
+}

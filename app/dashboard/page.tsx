@@ -7,20 +7,13 @@ import DashboardHeader from '@/features/dashboard/DashboardHeader';
 import DashboardTransactions from '@/features/dashboard/DashboardTransactions';
 import MonthlyGraph from '@/features/dashboard/MonthlyGraph';
 import NoticeList from '@/features/dashboard/NoticeList';
-import { apiClient } from '@/lib/api';
+import { fetchMyTrades } from '@/lib/trades/fetch-trades';
+import { fetchMe } from '@/lib/users/fetch-me';
 import { saveMemberProfile } from '@/lib/auth-user';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
 import type { TransactionRow } from '@/features/dashboard/TransactionTableCard';
 import type { TradeApiRow } from '@/features/trade/types';
 
-type TradeResponse = { result?: TradeApiRow[] };
-type MyInfoResponse = {
-  result?: {
-    businessNumber?: string;
-    companyName?: string;
-    ceoName?: string;
-  } | null;
-};
 
 function statusToProgressStep(status: string): number {
   switch (status) {
@@ -49,22 +42,11 @@ export default function DashboardPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const [tradesRes, meRes] = await Promise.all([
-          apiClient.get('/api/v1/trades'),
-          apiClient.get('/api/v1/users/me'),
-        ]);
+        const [fetched, meResult] = await Promise.all([fetchMyTrades(), fetchMe()]);
         if (cancelled) return;
-        const fetched = ((tradesRes.data as TradeResponse).result ?? []);
-        const meResult = (meRes.data as MyInfoResponse)?.result;
+
         const bn = (meResult?.businessNumber ?? '').replace(/\D/g, '');
-        const mine =
-          bn.length === 10
-            ? fetched.filter((t) => {
-                const s = (t.seller.businessNumber ?? '').replace(/\D/g, '');
-                const b = (t.buyer.businessNumber ?? '').replace(/\D/g, '');
-                return s === bn || b === bn;
-              })
-            : [];
+        const mine = fetched;
 
         const company = meResult?.companyName ?? '';
         const ceo = meResult?.ceoName ?? '';

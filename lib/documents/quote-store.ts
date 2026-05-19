@@ -1,4 +1,9 @@
 import { calcTotals } from '@/lib/documents/calc-totals';
+import { createDefaultDraftItems } from '@/lib/documents/line-items';
+import {
+  DEFAULT_DOWN_PAYMENT_PERCENT,
+  formatPaymentTerms,
+} from '@/lib/documents/payment-terms';
 import {
   DEFAULT_CLIENT_PROFILE,
   DEFAULT_SUPPLIER_PROFILE,
@@ -7,10 +12,8 @@ import {
 import { enrichPoDraft } from '@/lib/documents/enrich-po-draft';
 import { enrichPoIssued } from '@/lib/documents/enrich-po-issued';
 
-import {
-  CURRENT_COMPANY_ID,
-  CURRENT_COMPANY_NAME,
-} from '@/lib/documents/current-company';
+import type { DocumentCompanyContext } from '@/lib/documents/resolve-current-company';
+import { isSupplierContext } from '@/lib/documents/resolve-current-company';
 import type { DocumentUser, LineItem, QuoteDocument, QuoteStatus } from '@/types/documents/document';
 
 const DEFAULT_SUPPLIER: DocumentUser = {
@@ -39,10 +42,7 @@ const DEMO_PI_ITEMS: LineItem[] = [
 ];
 
 function defaultItems(): LineItem[] {
-  return [
-    { id: '1', description: '원두 10kg', quantity: 2, unitPrice: 85000 },
-    { id: '2', description: '종이컵 1000개입', quantity: 1, unitPrice: 42000 },
-  ];
+  return createDefaultDraftItems();
 }
 
 function buildQuote(partial: Partial<QuoteDocument> & Pick<QuoteDocument, 'id' | 'status'>): QuoteDocument {
@@ -278,28 +278,37 @@ export function upsertQuoteFromPatch(quoteId: string, patch: Partial<QuoteDocume
   return true;
 }
 
-export function createDraftQuote(): QuoteDocument {
+export function createDraftQuote(current: DocumentCompanyContext): QuoteDocument {
   const id = `quote-${Date.now()}`;
-  const items = [
-    { id: '1', description: '원두 10kg', detail: '디카페인', quantity: 2, unitPrice: 85000 },
-    { id: '2', description: '종이컵 1000개입', detail: '12oz', quantity: 1, unitPrice: 42000 },
-  ];
-  const supplier =
-    CURRENT_COMPANY_ID.startsWith('company-supplier')
-      ? {
-          companyId: CURRENT_COMPANY_ID,
-          companyName: CURRENT_COMPANY_NAME,
-          role: 'SUPPLIER' as const,
-        }
-      : DEFAULT_SUPPLIER;
+  const items = createDefaultDraftItems();
+
+  const supplier: DocumentUser = isSupplierContext(current)
+    ? {
+        companyId: current.companyId,
+        companyName: current.companyName,
+        role: 'SUPPLIER',
+      }
+    : DEFAULT_SUPPLIER;
+
+  const client: DocumentUser = isSupplierContext(current)
+    ? CLIENT_COMPANY
+    : {
+        companyId: current.companyId,
+        companyName: current.companyName,
+        role: 'CLIENT',
+      };
 
   const quote = buildQuote({
     id,
     status: 'DRAFT',
     supplier,
+    client,
     items,
     totals: calcTotals(items),
+    downPaymentPercent: DEFAULT_DOWN_PAYMENT_PERCENT,
+    paymentTerms: formatPaymentTerms(DEFAULT_DOWN_PAYMENT_PERCENT),
     bankVerified: true,
+    supplierProfile: isSupplierContext(current) ? DEFAULT_SUPPLIER_PROFILE : undefined,
     clientProfile: DEFAULT_CLIENT_PROFILE,
   });
   saveQuote(quote);

@@ -3,7 +3,8 @@ import { SupplierQuoteScreen } from '@/features/documents/quote/supplier/Supplie
 import { getScreenConfig } from '@/lib/documents/get-screen-config';
 import type { QuoteDocument, QuoteScreenProps, UserRole } from '@/types/documents/document';
 
-import type { MockClient } from '@/features/documents/quote/supplier/constants';
+import type { ClientCompany } from '@/features/documents/quote/supplier/constants';
+import type { QuoteSchedule } from '@/lib/documents/schedule';
 
 export function QuoteScreenRouter({
   quote,
@@ -13,6 +14,8 @@ export function QuoteScreenRouter({
   lastSavedLabel,
   onItemsChange,
   onClientChange,
+  onDownPaymentPercentChange,
+  onScheduleChange,
   onSignatureChange,
   onDeliveryDateChange,
   onShippingAddressChange,
@@ -20,7 +23,9 @@ export function QuoteScreenRouter({
   viewerRole: UserRole;
   lastSavedLabel?: string;
   onItemsChange?: (items: QuoteDocument['items']) => void;
-  onClientChange?: (client: MockClient) => void;
+  onClientChange?: (client: ClientCompany) => void;
+  onDownPaymentPercentChange?: (percent: number) => void;
+  onScheduleChange?: (patch: Partial<QuoteSchedule>) => void;
   onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
   onDeliveryDateChange?: (value: string) => void;
   onShippingAddressChange?: (value: string) => void;
@@ -51,6 +56,8 @@ export function QuoteScreenRouter({
       lastSavedLabel={lastSavedLabel}
       onItemsChange={onItemsChange}
       onClientChange={onClientChange}
+      onDownPaymentPercentChange={onDownPaymentPercentChange}
+      onScheduleChange={onScheduleChange}
       onSignatureChange={onSignatureChange}
     />
   );

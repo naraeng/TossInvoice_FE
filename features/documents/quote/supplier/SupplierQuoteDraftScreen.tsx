@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 
 import { ClientSection } from '@/features/documents/quote/supplier/components/ClientSection';
 import { PaymentSection } from '@/features/documents/quote/supplier/components/PaymentSection';
@@ -8,15 +7,20 @@ import { QuoteDraftHeader } from '@/features/documents/quote/supplier/components
 import { QuoteItemsSection } from '@/features/documents/quote/supplier/components/QuoteItemsSection';
 import { ScheduleSection } from '@/features/documents/quote/supplier/components/ScheduleSection';
 import { SignaturePadSection } from '@/features/documents/quote/supplier/components/SignaturePadSection';
-import { MOCK_CLIENTS, type MockClient } from '@/features/documents/quote/supplier/constants';
+import type { ClientCompany } from '@/features/documents/quote/supplier/constants';
+import { clientCompanyFromQuote } from '@/features/documents/quote/supplier/lib/client-from-quote';
+import { resolveDownPaymentPercent } from '@/lib/documents/payment-terms';
+import { resolveQuoteSchedule, type QuoteSchedule } from '@/lib/documents/schedule';
 import type { QuoteDocument } from '@/types/documents/document';
 
 type Props = {
   quote: QuoteDocument;
   lastSavedLabel?: string;
   onItemsChange: (items: QuoteDocument['items']) => void;
-  onClientChange: (client: MockClient) => void;
-  onSignatureChange?: (signed: boolean) => void;
+  onClientChange: (client: ClientCompany) => void;
+  onDownPaymentPercentChange: (percent: number) => void;
+  onScheduleChange: (patch: Partial<QuoteSchedule>) => void;
+  onSignatureChange?: (signed: boolean, signatureDataUrl?: string) => void;
 };
 
 export function SupplierQuoteDraftScreen({
@@ -24,20 +28,15 @@ export function SupplierQuoteDraftScreen({
   lastSavedLabel,
   onItemsChange,
   onClientChange,
+  onDownPaymentPercentChange,
+  onScheduleChange,
   onSignatureChange,
 }: Props) {
-  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(() => {
-    const match = MOCK_CLIENTS.find((c) => c.name === quote.client.companyName);
-    return match?.id ?? MOCK_CLIENTS[0]?.id;
-  });
+  const selectedClient = clientCompanyFromQuote(quote);
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
+  const schedule = resolveQuoteSchedule(quote);
 
-  useEffect(() => {
-    const match = MOCK_CLIENTS.find((c) => c.name === quote.client.companyName);
-    // if (match) setSelectedClientId(match.id);
-  }, [quote.client.companyName]);
-
-  const handleSelectClient = (client: MockClient) => {
-    setSelectedClientId(client.id);
+  const handleSelectClient = (client: ClientCompany) => {
     onClientChange(client);
   };
 
@@ -47,11 +46,15 @@ export function SupplierQuoteDraftScreen({
 
       <article className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.25)]">
         <div className="divide-y divide-slate-100 px-5 sm:px-8">
-          <ClientSection selectedClientId={selectedClientId} onSelect={handleSelectClient} />
+          <ClientSection selectedClientId={selectedClient?.id} onSelect={handleSelectClient} />
           <QuoteItemsSection items={quote.items} totals={quote.totals} onChange={onItemsChange} />
-          <PaymentSection totals={quote.totals} />
-          <ScheduleSection />
-          <SignaturePadSection onSigned={onSignatureChange} />
+          <PaymentSection
+            totals={quote.totals}
+            downPaymentPercent={downPaymentPercent}
+            onDownPaymentPercentChange={onDownPaymentPercentChange}
+          />
+          <ScheduleSection schedule={schedule} onChange={onScheduleChange} />
+          <SignaturePadSection quote={quote} onSigned={onSignatureChange} />
         </div>
       </article>
     </>

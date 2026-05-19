@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowDownUp, Check, ClipboardList } from 'lucide-react';
+import { ArrowDownUp, Check, ClipboardList, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
 import TransactionProgress from '@/features/dashboard/TransactionProgress';
 import type { TradeApiRow } from '@/features/trade/types';
+import Link from 'next/link';
 
 type TradeTab = 'sales' | 'purchase';
 type TradeFilter = 'inProgress' | 'completed';
@@ -81,12 +82,18 @@ function formatWon(amount?: number): string {
  */
 function statusToProgressStep(status: string): number {
   switch (status) {
-    case 'PENDING_PO': return 0;
-    case 'PENDING_SELLER_SIGN': return 1;
-    case 'PENDING_INVOICE': return 2;
-    case 'PENDING_BUYER_CONFIRM': return 3;
-    case 'COMPLETED': return 4;
-    default: return 0;
+    case 'PENDING_PO':
+      return 0;
+    case 'PENDING_SELLER_SIGN':
+      return 1;
+    case 'PENDING_INVOICE':
+      return 2;
+    case 'PENDING_BUYER_CONFIRM':
+      return 3;
+    case 'COMPLETED':
+      return 4;
+    default:
+      return 0;
   }
 }
 
@@ -97,14 +104,17 @@ function badgeColorBySeed(seed: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function toRowsFromApi(trades: TradeApiRow[]): { inProgress: TradeRow[]; completed: CompletedTradeRow[] } {
+function toRowsFromApi(trades: TradeApiRow[]): {
+  inProgress: TradeRow[];
+  completed: CompletedTradeRow[];
+} {
   const inProgress: TradeRow[] = [];
   const completed: CompletedTradeRow[] = [];
 
   for (const trade of trades) {
     const isSales = trade.role === 'SELLER';
     const counterpart = isSales ? trade.buyer : trade.seller;
-    const selfCompany = isSales ? trade.seller : trade.buyer;
+    // const selfCompany = isSales ? trade.seller : trade.buyer;
     const tab: TradeTab = isSales ? 'sales' : 'purchase';
     const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
 
@@ -141,7 +151,7 @@ function toRowsFromApi(trades: TradeApiRow[]): { inProgress: TradeRow[]; complet
 
 function toRowsFromApiWithMe(
   trades: TradeApiRow[],
-  myBusinessNumber: string,
+  myBusinessNumber: string
 ): { inProgress: TradeRow[]; completed: CompletedTradeRow[] } {
   const normalizedMe = myBusinessNumber.replace(/\D/g, '');
   if (normalizedMe.length !== 10) return { inProgress: [], completed: [] };
@@ -158,7 +168,7 @@ function toRowsFromApiWithMe(
     if (!isMeSeller && !isMeBuyer) continue;
 
     const counterpart = isMeSeller ? trade.buyer : trade.seller;
-    const selfCompany = isMeSeller ? trade.seller : trade.buyer;
+    // const selfCompany = isMeSeller ? trade.seller : trade.buyer;
     const tab: TradeTab = isMeSeller ? 'sales' : 'purchase';
     const status = trade.status === 'COMPLETED' ? 'completed' : 'inProgress';
 
@@ -206,22 +216,22 @@ export default function TradeBoard({
 }) {
   const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState<TradeFilter>('inProgress');
-  const [activeTab, setActiveTab] = useState<TradeTab>(
-    () => (searchParams.get('tab') === 'purchase' ? 'purchase' : 'sales'),
+  const [activeTab, setActiveTab] = useState<TradeTab>(() =>
+    searchParams.get('tab') === 'purchase' ? 'purchase' : 'sales'
   );
   const [activeSort, setActiveSort] = useState<SortOption>('recentDesc');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
   const tradeRows = useMemo(
     () =>
-      myBusinessNumber
-        ? toRowsFromApiWithMe(trades, myBusinessNumber)
-        : toRowsFromApi(trades),
-    [myBusinessNumber, trades],
+      myBusinessNumber ? toRowsFromApiWithMe(trades, myBusinessNumber) : toRowsFromApi(trades),
+    [myBusinessNumber, trades]
   );
 
   const rows = useMemo(() => {
-    const filteredRows = tradeRows.inProgress.filter((row) => row.type === activeTab && row.status === activeFilter);
+    const filteredRows = tradeRows.inProgress.filter(
+      (row) => row.type === activeTab && row.status === activeFilter
+    );
 
     return [...filteredRows].sort((a, b) => {
       if (activeSort === 'recentDesc') return parseTradeDate(b.date) - parseTradeDate(a.date);
@@ -236,34 +246,46 @@ export default function TradeBoard({
     [activeTab, tradeRows.completed]
   );
 
-  const activeSortLabel = SORT_OPTIONS.find((option) => option.id === activeSort)?.label ?? '최근 거래순';
+  const activeSortLabel =
+    SORT_OPTIONS.find((option) => option.id === activeSort)?.label ?? '최근 거래순';
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2.5">
-          {FILTER_OPTIONS.map((option) => {
-            const isActive = option.id === activeFilter;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setActiveFilter(option.id)}
-                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {option.id === 'inProgress' ? (
-                  <ClipboardList className="h-3.5 w-3.5" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-                {option.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {FILTER_OPTIONS.map((option) => {
+              const isActive = option.id === activeFilter;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setActiveFilter(option.id)}
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {option.id === 'inProgress' ? (
+                    <ClipboardList className="h-3.5 w-3.5" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <Button
+            asChild
+            className="mt-2 rounded-xl border-[1.5px] border-blue-600 bg-white px-6 py-4.5 text-blue-600 hover:bg-blue-600 hover:text-white"
+          >
+            <Link href="/documents/quotes/new" className="flex items-center justify-center">
+              <Plus className="mr-1 size-4" />
+              <span className="text-sm font-semibold">거래 시작</span>
+            </Link>
+          </Button>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3 md:p-4">
@@ -355,7 +377,9 @@ export default function TradeBoard({
                         </div>
                       </td>
                       <td className="py-3 pl-0 pr-2 text-slate-700">{row.counterpart}</td>
-                      <td className="py-3 pl-0 pr-2 font-semibold text-slate-700">{row.itemSummary}</td>
+                      <td className="py-3 pl-0 pr-2 font-semibold text-slate-700">
+                        {row.itemSummary}
+                      </td>
                       <td className="py-3 pl-0 pr-2 font-semibold text-slate-700">{row.amount}</td>
                       <td className="py-3 pl-0 pr-2 text-slate-600">{row.completedDate}</td>
                       <td className="py-3 pl-0 pr-2 text-right">
@@ -376,77 +400,83 @@ export default function TradeBoard({
           ) : (
             <div>
               <table className="w-full table-fixed text-sm">
-              <colgroup>
-                <col style={{ width: '15%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '24%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '19%' }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-[11px] font-medium text-slate-400">
-                  <th className="pb-3 pl-3 pr-2">
-                    <div className="flex items-center gap-3">
-                      <span className="h-9 w-9 shrink-0" aria-hidden />
-                      <span>거래처</span>
-                    </div>
-                  </th>
-                  <th className="pb-3 pl-0 pr-2">사업자번호</th>
-                  <th className="pb-3 pl-0 pr-2">대표자</th>
-                  <th className="pb-3 pl-0 pr-2">거래품목</th>
-                  <th className="pb-3 pl-0 pr-2">진행도</th>
-                  <th className="pb-3 pl-0 pr-2">최근 거래</th>
-                  <th className="pb-3 pl-0 pr-2 text-center">액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-4 pl-3 pr-2">
+                <colgroup>
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '19%' }} />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-[11px] font-medium text-slate-400">
+                    <th className="pb-3 pl-3 pr-2">
                       <div className="flex items-center gap-3">
-                        <span
-                          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${row.badgeClassName}`}
-                        >
-                          {row.badgeText}
-                        </span>
-                        <span className="font-bold text-slate-800">{row.company}</span>
+                        <span className="h-9 w-9 shrink-0" aria-hidden />
+                        <span>거래처</span>
                       </div>
-                    </td>
-                    <td className="py-4 pl-0 pr-2 text-slate-500">{row.businessNumber}</td>
-                    <td className="py-4 pl-0 pr-2 text-slate-500">{row.owner}</td>
-                    <td className="max-w-0 py-4 pl-0 pr-2">
-                      <span className="block truncate font-semibold text-slate-800" title={row.itemSummary}>
-                        {row.itemSummary}
-                      </span>
-                    </td>
-                    <td className="py-4 pl-0 pr-2">
-                      <TransactionProgress currentStep={row.progressStep} cancelled={row.cancelled} />
-                    </td>
-                    <td className="py-4 pl-0 pr-2 text-slate-600">{row.date}</td>
-                    <td className="py-4 pl-0 pr-2">
-                      <div className="flex flex-col items-center gap-1.5">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-8 w-24 rounded-lg px-3 text-xs font-semibold"
-                        >
-                          거래보기
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 w-24 rounded-lg border-slate-200 px-3 text-xs font-semibold text-slate-500"
-                        >
-                          상세보기
-                        </Button>
-                      </div>
-                    </td>
+                    </th>
+                    <th className="pb-3 pl-0 pr-2">사업자번호</th>
+                    <th className="pb-3 pl-0 pr-2">대표자</th>
+                    <th className="pb-3 pl-0 pr-2">거래품목</th>
+                    <th className="pb-3 pl-0 pr-2">진행도</th>
+                    <th className="pb-3 pl-0 pr-2">최근 거래</th>
+                    <th className="pb-3 pl-0 pr-2 text-center">액션</th>
                   </tr>
-                ))}
-              </tbody>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id} className="border-b border-slate-50 last:border-0">
+                      <td className="py-4 pl-3 pr-2">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${row.badgeClassName}`}
+                          >
+                            {row.badgeText}
+                          </span>
+                          <span className="font-bold text-slate-800">{row.company}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 pl-0 pr-2 text-slate-500">{row.businessNumber}</td>
+                      <td className="py-4 pl-0 pr-2 text-slate-500">{row.owner}</td>
+                      <td className="max-w-0 py-4 pl-0 pr-2">
+                        <span
+                          className="block truncate font-semibold text-slate-800"
+                          title={row.itemSummary}
+                        >
+                          {row.itemSummary}
+                        </span>
+                      </td>
+                      <td className="py-4 pl-0 pr-2">
+                        <TransactionProgress
+                          currentStep={row.progressStep}
+                          cancelled={row.cancelled}
+                        />
+                      </td>
+                      <td className="py-4 pl-0 pr-2 text-slate-600">{row.date}</td>
+                      <td className="py-4 pl-0 pr-2">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8 w-24 rounded-lg px-3 text-xs font-semibold"
+                          >
+                            거래보기
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-24 rounded-lg border-slate-200 px-3 text-xs font-semibold text-slate-500"
+                          >
+                            상세보기
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           )}

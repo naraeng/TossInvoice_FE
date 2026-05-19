@@ -1,38 +1,58 @@
-export type MockClient = {
+import type { CompanyApiResult } from '@/lib/company/types';
+
+export type ClientCompany = {
   id: string;
   name: string;
   businessNo: string;
   representative: string;
+  bank: string;
+  account: string;
   bankAccount: string;
   verified: boolean;
+  status: string;
+  businessType: string;
+  address: string;
+  phone: string;
+  email: string;
+  companyType: string;
 };
 
-export const MOCK_CLIENTS: MockClient[] = [
-  {
-    id: 'client-narae',
-    name: '날애커피',
-    businessNo: '123-45-67890',
-    representative: '김민수',
-    bankAccount: '국민 · 123456-01-123456',
-    verified: true,
-  },
-  {
-    id: 'client-gaon',
-    name: '가온분식',
-    businessNo: '987-65-43210',
-    representative: '이서연',
-    bankAccount: '신한 · 110-234-567890',
-    verified: true,
-  },
-  {
-    id: 'client-hanbit',
-    name: '한빛식자재',
-    businessNo: '456-78-90123',
-    representative: '박지훈',
-    bankAccount: '우리 · 1002-345-678901',
-    verified: false,
-  },
-];
+export function maskBankAccount(account: string) {
+  const parts = account.split('-').filter(Boolean);
+  if (parts.length >= 3) {
+    return `${parts[0]}-***-***-${parts[parts.length - 1].slice(-2)}`;
+  }
+  if (account.length <= 4) return account;
+  return `${account.slice(0, 3)}-***-***-${account.slice(-2)}`;
+}
+
+export function formatClientBankLine(client: Pick<ClientCompany, 'bank' | 'account' | 'companyType'>) {
+  const bankLabel = client.bank.replace(/은행$/, '').trim();
+  const accountLabel = client.account ? maskBankAccount(client.account) : '';
+  const left = [bankLabel, accountLabel].filter(Boolean).join(' ');
+  if (!left && !client.companyType) return '';
+  if (!client.companyType) return left;
+  return `${left} · ${client.companyType}`;
+}
+
+export function mapCompanyToClient(company: CompanyApiResult): ClientCompany {
+  return {
+    id: company.businessNumber,
+    name: company.companyName,
+    businessNo: company.businessNumber,
+    representative: company.ceoName,
+    bank: company.bank,
+    account: company.account,
+    bankAccount: `${company.bank} · ${company.account}`,
+    verified: company.status === '정상',
+    status: company.status,
+    businessType: company.businessType,
+    address: company.address,
+    phone: company.phone,
+    email: company.email,
+    companyType: company.companyType,
+  };
+}
 
 export const PROTECTION_FEATURES = [
   '거래처·계좌 변경 시 자동 정지',

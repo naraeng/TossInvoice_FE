@@ -4,17 +4,16 @@ import { Check, Info, Lock, Shield } from 'lucide-react';
 
 import { type DocumentAction } from '@/components/documents/DocumentActionBar';
 import { Button } from '@/components/ui/button';
-import {
-  DOWN_PAYMENT_RATIO,
-  PROTECTION_FEATURES,
-  calcTransactionFee,
-} from '@/features/documents/quote/supplier/constants';
+import { PROTECTION_FEATURES, calcTransactionFee } from '@/features/documents/quote/supplier/constants';
 import { formatKRW } from '@/lib/documents/format';
+import { calcPaymentSplit, resolveDownPaymentPercent } from '@/lib/documents/payment-terms';
 import { cn } from '@/lib/utils';
 import type { Totals } from '@/types/documents/document';
 
 type Props = {
   totals: Totals;
+  downPaymentPercent?: number;
+  paymentTerms?: string;
   actions: DocumentAction[];
 };
 
@@ -22,10 +21,15 @@ function SidebarDivider({ className }: { className?: string }) {
   return <hr className={cn('border-0 border-t border-slate-100', className)} />;
 }
 
-export function SupplierQuoteDraftSidebar({ totals, actions }: Props) {
+export function SupplierQuoteDraftSidebar({
+  totals,
+  downPaymentPercent,
+  paymentTerms,
+  actions,
+}: Props) {
   const fee = calcTransactionFee(totals.total);
-  const downPayment = Math.round(totals.total * DOWN_PAYMENT_RATIO);
-  const balance = totals.total - downPayment;
+  const percent = resolveDownPaymentPercent({ downPaymentPercent, paymentTerms });
+  const { downPayment, balance } = calcPaymentSplit(totals, percent);
 
   const paymentSteps = [
     { title: 'PO 합의 후', description: `선금 ${formatKRW(downPayment)} 자동 송금` },
@@ -94,6 +98,7 @@ export function SupplierQuoteDraftSidebar({ totals, actions }: Props) {
         <div className="mt-4 space-y-2">
           {primaryAction && (
             <Button
+              type="button"
               className="h-auto w-full flex-col gap-0.5 rounded-xl bg-[#3182F6] py-3.5 text-base font-bold shadow-[0_4px_14px_-4px_rgba(49,130,246,0.55)] hover:bg-[#1b64da]"
               onClick={primaryAction.onClick}
               disabled={primaryAction.disabled}
@@ -106,6 +111,7 @@ export function SupplierQuoteDraftSidebar({ totals, actions }: Props) {
           )}
           {secondaryAction && (
             <Button
+              type="button"
               variant="outline"
               className="h-11 w-full rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"
               onClick={secondaryAction.onClick}

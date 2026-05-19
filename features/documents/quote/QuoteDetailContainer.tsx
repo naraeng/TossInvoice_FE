@@ -15,11 +15,29 @@ import { SupplierQuotePoIssuedSidebar } from '@/features/documents/quote/supplie
 import { QuoteScreenRouter } from '@/features/documents/quote/QuoteScreenRouter';
 import { SupplierQuoteDraftSidebar } from '@/features/documents/quote/supplier/SupplierQuoteDraftSidebar';
 import { SupplierQuoteIssuedSidebar } from '@/features/documents/quote/supplier/SupplierQuoteIssuedSidebar';
-import type { MockClient } from '@/features/documents/quote/supplier/constants';
+import type { ClientCompany } from '@/features/documents/quote/supplier/constants';
+import { enrichIssuedQuote } from '@/lib/documents/enrich-issued-quote';
 import { getScreenConfig } from '@/lib/documents/get-screen-config';
 import { saveQuote } from '@/lib/documents/quote-store';
 import { calcTotals } from '@/lib/documents/calc-totals';
-import { getPoClientSignature, getPoSupplierSignature, upsertSignature } from '@/lib/documents/signature-utils';
+import {
+  clampDownPaymentPercent,
+  formatPaymentTerms,
+} from '@/lib/documents/payment-terms';
+import {
+  minValidityUntilDate,
+  normalizePaymentDueDays,
+  normalizeProductionDays,
+  type QuoteSchedule,
+} from '@/lib/documents/schedule';
+import { getStartTradeErrorMessage } from '@/lib/trades/start-trade-errors';
+import { startTrade } from '@/lib/trades/start-trade';
+import {
+  getPiSupplierSignature,
+  getPoClientSignature,
+  getPoSupplierSignature,
+  upsertSignature,
+} from '@/lib/documents/signature-utils';
 import type { QuoteDocument, UserRole } from '@/types/documents/document';
 
 type Props = {
@@ -87,13 +105,48 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     persist({ ...quote, items, totals: calcTotals(items) });
   };
 
-  const handleClientChange = (client: MockClient) => {
+  const handleScheduleChange = (patch: Partial<QuoteSchedule>) => {
+    persist({
+      ...quote,
+      ...('productionDays' in patch && {
+        productionDays: normalizeProductionDays(patch.productionDays),
+      }),
+      ...('paymentDueDays' in patch && {
+        paymentDueDays: normalizePaymentDueDays(patch.paymentDueDays),
+      }),
+      ...('validityUntil' in patch && {
+        validityUntil:
+          patch.validityUntil && patch.validityUntil < minValidityUntilDate()
+            ? minValidityUntilDate()
+            : patch.validityUntil || undefined,
+      }),
+    });
+  };
+
+  const handleDownPaymentPercentChange = (percent: number) => {
+    const downPaymentPercent = clampDownPaymentPercent(percent);
+    persist({
+      ...quote,
+      downPaymentPercent,
+      paymentTerms: formatPaymentTerms(downPaymentPercent),
+    });
+  };
+
+  const handleClientChange = (client: ClientCompany) => {
     persist({
       ...quote,
       client: {
         companyId: client.id,
         companyName: client.name,
         role: 'CLIENT',
+      },
+      clientProfile: {
+        businessNo: client.businessNo,
+        representative: client.representative,
+        address: client.address,
+        contact: [client.phone, client.email].filter(Boolean).join(' · '),
+        bankAccount: client.bankAccount,
+        verified: client.verified,
       },
       bankVerified: client.verified,
     });
@@ -185,6 +238,54 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     [quote, persist]
   );
 
+  const handleDraftSignatureChange = useCallback(
+    (signed: boolean, imageDataUrl?: string) => {
+      setHasDraftSupplierSignature(signed);
+      const signerName =
+        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+
+      if (!signed || !imageDataUrl) {
+        persist({
+          ...quote,
+          signatures: quote.signatures.filter(
+            (s) => !(s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope)),
+          ),
+        });
+        return;
+      }
+
+      persist({
+        ...quote,
+        signatures: upsertSignature(quote.signatures, {
+          party: 'SUPPLIER',
+          scope: 'PI',
+          signedAt: new Date().toISOString(),
+          signerName,
+          signatureImage: imageDataUrl,
+        }),
+      });
+    },
+    [quote, persist],
+  );
+
+  const handleIssueQuote = async () => {
+    const signatureImage = getPiSupplierSignature(quote)?.signatureImage;
+    if (!signatureImage) {
+      alert('서명 이미지가 필요합니다.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { tradeId } = await startTrade(quote, signatureImage);
+      persist(enrichIssuedQuote({ ...quote, tradeId }));
+    } catch (error: unknown) {
+      alert(getStartTradeErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleAction = async (action: string) => {
     setBusy(true);
     try {
@@ -212,7 +313,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       label: '서명하고 견적서 발행',
       variant: 'primary' as const,
       disabled: busy || !hasDraftSupplierSignature,
-      onClick: () => handleAction('ISSUE_QUOTE'),
+      onClick: () => void handleIssueQuote(),
     },
     {
       label: '임시저장',
@@ -223,7 +324,12 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   ];
 
   const sidebar = isDraftSupplier ? (
-    <SupplierQuoteDraftSidebar totals={quote.totals} actions={draftActions} />
+    <SupplierQuoteDraftSidebar
+      totals={quote.totals}
+      downPaymentPercent={quote.downPaymentPercent}
+      paymentTerms={quote.paymentTerms}
+      actions={draftActions}
+    />
   ) : isIssued && viewerRole === 'SUPPLIER' ? (
     <SupplierQuoteIssuedSidebar
       quote={quote}
@@ -303,9 +409,13 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         lastSavedLabel={lastSavedLabel}
         onItemsChange={config.editable ? handleItemsChange : undefined}
         onClientChange={isDraftSupplier ? handleClientChange : undefined}
+        onDownPaymentPercentChange={
+          isDraftSupplier ? handleDownPaymentPercentChange : undefined
+        }
+        onScheduleChange={isDraftSupplier ? handleScheduleChange : undefined}
         onSignatureChange={
           isDraftSupplier
-            ? setHasDraftSupplierSignature
+            ? handleDraftSignatureChange
             : isPoDraftClient
               ? handleClientPoSignature
               : isPoIssuedSupplier

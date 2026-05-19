@@ -1,9 +1,11 @@
 'use client';
 
 import { Plus, X } from 'lucide-react';
+import { useEffect } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { formatKRW } from '@/lib/documents/format';
+import { calcLineTotal, createEmptyLineItem } from '@/lib/documents/line-items';
 import type { LineItem, Totals } from '@/types/documents/document';
 
 import { SectionCard, SectionTitle } from './SectionCard';
@@ -14,25 +16,49 @@ type Props = {
   onChange: (items: LineItem[]) => void;
 };
 
-function newItemId() {
-  return `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+function parseQuantity(value: string) {
+  const parsed = Number(value.replace(/,/g, ''));
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
+
+function parseUnitPrice(value: string) {
+  const parsed = Number(value.replace(/,/g, ''));
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
+
+function formatInputNumber(value: number) {
+  return value > 0 ? String(value) : '';
 }
 
 export function QuoteItemsSection({ items, totals, onChange }: Props) {
-  const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
-    onChange(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  const displayItems = items.length > 0 ? items : [createEmptyLineItem()];
+
+  useEffect(() => {
+    if (items.length === 0) {
+      onChange([createEmptyLineItem()]);
+    }
+  }, [items.length, onChange]);
+
+  const updateItems = (nextItems: LineItem[]) => {
+    onChange(nextItems.length > 0 ? nextItems : [createEmptyLineItem()]);
+  };
+
+  const updateItem = (id: string, patch: Partial<LineItem>) => {
+    updateItems(displayItems.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
   const removeItem = (id: string) => {
-    if (items.length <= 1) return;
-    onChange(items.filter((item) => item.id !== id));
+    if (displayItems.length <= 1) {
+      updateItems([createEmptyLineItem()]);
+      return;
+    }
+    updateItems(displayItems.filter((item) => item.id !== id));
   };
 
   const addItem = () => {
-    onChange([
-      ...items,
-      { id: newItemId(), description: '', detail: '', quantity: 1, unitPrice: 0 },
-    ]);
+    updateItems([...displayItems, createEmptyLineItem()]);
   };
 
   return (
@@ -51,14 +77,14 @@ export function QuoteItemsSection({ items, totals, onChange }: Props) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => {
-              const lineTotal = item.quantity * item.unitPrice;
+            {displayItems.map((item) => {
+              const lineTotal = calcLineTotal(item);
               return (
                 <tr key={item.id} className="group border-b border-slate-100">
                   <td className="py-2.5 pr-2">
                     <Input
                       value={item.description}
-                      onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      onChange={(e) => updateItem(item.id, { description: e.target.value })}
                       placeholder="품목명 입력"
                       className="h-9 rounded-lg border-slate-200 bg-slate-50/50 text-sm focus-visible:bg-white"
                     />
@@ -66,28 +92,32 @@ export function QuoteItemsSection({ items, totals, onChange }: Props) {
                   <td className="py-2.5 pr-2">
                     <Input
                       value={item.detail ?? ''}
-                      onChange={(e) => updateItem(item.id, 'detail', e.target.value)}
+                      onChange={(e) => updateItem(item.id, { detail: e.target.value })}
                       placeholder="규격"
                       className="h-9 rounded-lg border-slate-200 bg-slate-50/50 text-sm focus-visible:bg-white"
                     />
                   </td>
                   <td className="py-2.5 pr-2">
                     <Input
-                      type="number"
-                      min={0}
-                      value={item.quantity}
-                      onChange={(e) => updateItem(item.id, 'quantity', Number(e.target.value) || 0)}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatInputNumber(item.quantity)}
+                      onChange={(e) =>
+                        updateItem(item.id, { quantity: parseQuantity(e.target.value) })
+                      }
+                      placeholder="0"
                       className="h-9 rounded-lg border-slate-200 bg-slate-50/50 text-sm focus-visible:bg-white"
                     />
                   </td>
                   <td className="py-2.5 pr-2">
                     <Input
-                      type="number"
-                      min={0}
-                      value={item.unitPrice}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatInputNumber(item.unitPrice)}
                       onChange={(e) =>
-                        updateItem(item.id, 'unitPrice', Number(e.target.value) || 0)
+                        updateItem(item.id, { unitPrice: parseUnitPrice(e.target.value) })
                       }
+                      placeholder="0"
                       className="h-9 rounded-lg border-slate-200 bg-slate-50/50 text-sm focus-visible:bg-white"
                     />
                   </td>
@@ -98,8 +128,7 @@ export function QuoteItemsSection({ items, totals, onChange }: Props) {
                     <button
                       type="button"
                       onClick={() => removeItem(item.id)}
-                      disabled={items.length <= 1}
-                      className="rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 disabled:opacity-30"
+                      className="rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"
                       aria-label="품목 삭제"
                     >
                       <X className="size-4" />
@@ -130,11 +159,9 @@ export function QuoteItemsSection({ items, totals, onChange }: Props) {
           <span>부가세 (10%)</span>
           <span className="tabular-nums">{formatKRW(totals.tax)}</span>
         </div>
-        <div className="flex flex-row items-center justify-between mt-2 w-full max-w-sm rounded-xl bg-[#E8F2FF] px-5 py-4 ring-1 ring-blue-100">
-          <p className="mb-8 text-xs font-semibold text-[#3182F6]">총액 (VAT 포함)</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-[#3182F6]">
-            {formatKRW(totals.total)}
-          </p>
+        <div className="mt-2 flex w-full max-w-sm items-center justify-between rounded-xl bg-[#E8F2FF] px-5 py-4 ring-1 ring-blue-100">
+          <p className="text-xs font-semibold text-[#3182F6]">총액 (VAT 포함)</p>
+          <p className="text-2xl font-bold tabular-nums text-[#3182F6]">{formatKRW(totals.total)}</p>
         </div>
       </div>
     </SectionCard>
