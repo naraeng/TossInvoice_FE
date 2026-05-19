@@ -9,8 +9,8 @@ export type MockClient = {
 
 export const MOCK_CLIENTS: MockClient[] = [
   {
-    id: 'client-natae',
-    name: '낮애커피',
+    id: 'client-narae',
+    name: '날애커피',
     businessNo: '123-45-67890',
     representative: '김민수',
     bankAccount: '국민 · 123456-01-123456',

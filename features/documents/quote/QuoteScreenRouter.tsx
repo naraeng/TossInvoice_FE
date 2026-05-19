@@ -14,12 +14,16 @@ export function QuoteScreenRouter({
   onItemsChange,
   onClientChange,
   onSignatureChange,
+  onDeliveryDateChange,
+  onShippingAddressChange,
 }: QuoteScreenProps & {
   viewerRole: UserRole;
   lastSavedLabel?: string;
   onItemsChange?: (items: QuoteDocument['items']) => void;
   onClientChange?: (client: MockClient) => void;
-  onSignatureChange?: (signed: boolean) => void;
+  onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
+  onDeliveryDateChange?: (value: string) => void;
+  onShippingAddressChange?: (value: string) => void;
 }) {
   const config = getScreenConfig(viewerRole, quote.status);
   const isEditable = editable ?? config.editable;
@@ -32,6 +36,9 @@ export function QuoteScreenRouter({
         editable={isEditable}
         showSignature={showSig}
         onItemsChange={onItemsChange}
+        onDeliveryDateChange={onDeliveryDateChange}
+        onShippingAddressChange={onShippingAddressChange}
+        onSignatureChange={onSignatureChange}
       />
     );
   }

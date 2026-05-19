@@ -2,6 +2,9 @@ import { QuoteDocumentBody } from '@/components/documents/QuoteDocumentBody';
 import type { QuoteDocument } from '@/types/documents/document';
 
 import { SupplierQuoteDraftScreen } from './SupplierQuoteDraftScreen';
+import { SupplierQuoteIssuedScreen } from './SupplierQuoteIssuedScreen';
+import { SupplierQuotePoConfirmedScreen } from './SupplierQuotePoConfirmedScreen';
+import { SupplierQuotePoIssuedScreen } from './SupplierQuotePoIssuedScreen';
 import type { MockClient } from './constants';
 
 type Props = {
@@ -11,7 +14,7 @@ type Props = {
   lastSavedLabel?: string;
   onItemsChange?: (items: QuoteDocument['items']) => void;
   onClientChange?: (client: MockClient) => void;
-  onSignatureChange?: (signed: boolean) => void;
+  onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
 export function SupplierQuoteScreen({
@@ -23,6 +26,29 @@ export function SupplierQuoteScreen({
   onClientChange,
   onSignatureChange,
 }: Props) {
+  if (quote.status === 'ISSUED') {
+    return <SupplierQuoteIssuedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'PO_ISSUED') {
+    return <SupplierQuotePoIssuedScreen quote={quote} onSignatureChange={onSignatureChange} />;
+  }
+
+  if (quote.status === 'PO_CONFIRMED') {
+    return <SupplierQuotePoConfirmedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'INVOICE_ISSUED') {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-8 text-center">
+        <p className="text-lg font-bold text-emerald-900">최종 invoice 발행 완료</p>
+        <p className="mt-2 text-sm text-emerald-800">
+          {quote.invoiceDocumentNo ?? 'Invoice'}가 발주처에 전송되었습니다.
+        </p>
+      </div>
+    );
+  }
+
   if (quote.status === 'DRAFT' && editable && onItemsChange && onClientChange) {
     return (
       <SupplierQuoteDraftScreen
@@ -40,16 +66,6 @@ export function SupplierQuoteScreen({
       {quote.status === 'DRAFT' && (
         <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
           품목과 단가를 입력한 뒤 사이드바에서 견적서를 발행하세요.
-        </p>
-      )}
-      {quote.status === 'PO_ISSUED' && (
-        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          발주처가 발행한 PO를 확인하고 서명하면 거래가 확정됩니다.
-        </p>
-      )}
-      {quote.status === 'PO_CONFIRMED' && (
-        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          양측 서명이 완료되었습니다. 인보이스를 발행할 수 있습니다.
         </p>
       )}
       <QuoteDocumentBody

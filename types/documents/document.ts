@@ -41,11 +41,17 @@ export interface Totals {
   total: number;
 }
 
+export type SignatureScope = 'PI' | 'PO' | 'INVOICE';
+
 export interface SignatureRecord {
   party: UserRole;
+  /** PI(견적) / PO(발주) 구분 — 미지정 시 party·문맥으로 추론 */
+  scope?: SignatureScope;
   signedAt: string;
   signerName: string;
   ipAddress?: string;
+  /** 캔버스 서명 이미지 (data URL) */
+  signatureImage?: string;
 }
 
 export interface TransactionTerms {
@@ -70,6 +76,32 @@ export interface QuoteDocument {
   transactionTerms?: TransactionTerms;
   note?: string;
   bankVerified?: boolean;
+  /** PI 견적번호 (PO 작성 시 참조) */
+  piDocumentNo?: string;
+  /** 발주서 번호 */
+  poDocumentNo?: string;
+  /** 발주일 (PO) */
+  poIssuedAt?: string;
+  /** 납품 희망일 */
+  deliveryDate?: string;
+  /** 배송 주소 */
+  shippingAddress?: string;
+  /** 거래 토큰 (PO 발행 후) */
+  transactionToken?: string;
+  /** invoice 번호 */
+  invoiceDocumentNo?: string;
+  /** invoice 발행(또는 작성 시작) 시각 */
+  invoiceIssuedAt?: string;
+  /** 택배사 */
+  courier?: string;
+  /** 운송장 번호 */
+  trackingNumber?: string;
+  /** 발송일 */
+  shipmentDate?: string;
+  /** 도착 예정일 */
+  estimatedArrival?: string;
+  /** 물건 도착 확인 시각 (발주처) */
+  arrivalConfirmedAt?: string;
 }
 
 export interface QuoteScreenProps {

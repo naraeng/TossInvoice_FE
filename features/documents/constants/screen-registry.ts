@@ -50,11 +50,9 @@ export const QUOTE_SCREEN_MAP: Record<
   },
   CLIENT: {
     ISSUED: {
-      title: '견적서 확인',
+      title: '견적서 수신',
       editable: false,
       showSignature: false,
-      primaryAction: { label: '발주하기', action: 'START_PO' },
-      secondaryAction: { label: '반려', action: 'REJECT_QUOTE' },
     },
     PO_DRAFT: {
       title: '발주서 작성',

@@ -1,43 +1,68 @@
-import { QuoteDocumentBody } from '@/components/documents/QuoteDocumentBody';
 import type { QuoteDocument } from '@/types/documents/document';
+
+import { ClientQuoteInvoiceIssuedScreen } from './ClientQuoteInvoiceIssuedScreen';
+import { ClientQuoteIssuedScreen } from './ClientQuoteIssuedScreen';
+import { ClientQuotePoConfirmedScreen } from './ClientQuotePoConfirmedScreen';
+import { ClientQuotePoDraftScreen } from './ClientQuotePoDraftScreen';
+import { ClientQuotePoIssuedScreen } from './ClientQuotePoIssuedScreen';
 
 type Props = {
   quote: QuoteDocument;
   editable: boolean;
   showSignature: boolean;
   onItemsChange?: (items: QuoteDocument['items']) => void;
+  onDeliveryDateChange?: (value: string) => void;
+  onShippingAddressChange?: (value: string) => void;
+  onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
 };
 
 export function ClientQuoteScreen({
   quote,
-  editable,
-  showSignature,
-  onItemsChange,
+  onDeliveryDateChange,
+  onShippingAddressChange,
+  onSignatureChange,
 }: Props) {
-  return (
-    <div className="space-y-4">
-      {quote.status === 'ISSUED' && (
-        <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          견적 내용을 확인한 뒤 발주하기 또는 반려를 선택하세요.
-        </p>
-      )}
-      {quote.status === 'PO_DRAFT' && (
-        <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          발주 수량·품목을 확인하고 발주서를 발행하세요.
-        </p>
-      )}
-      {quote.status === 'REJECTED' && (
-        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-          이 견적은 반려되었습니다. 수주처에 재견적을 요청할 수 있습니다.
-        </p>
-      )}
-      <QuoteDocumentBody
+  if (quote.status === 'ISSUED') {
+    return <ClientQuoteIssuedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'PO_ISSUED') {
+    return <ClientQuotePoIssuedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'PO_CONFIRMED') {
+    return <ClientQuotePoConfirmedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'INVOICE_ISSUED') {
+    return <ClientQuoteInvoiceIssuedScreen quote={quote} />;
+  }
+
+  if (quote.status === 'PO_DRAFT') {
+    if (!onDeliveryDateChange || !onShippingAddressChange) {
+      return null;
+    }
+    return (
+      <ClientQuotePoDraftScreen
         quote={quote}
-        editable={editable}
-        showSignature={showSignature}
-        signatureRole="CLIENT"
-        onItemsChange={onItemsChange}
+        onDeliveryDateChange={onDeliveryDateChange}
+        onShippingAddressChange={onShippingAddressChange}
+        onSignatureChange={onSignatureChange}
       />
-    </div>
+    );
+  }
+
+  if (quote.status === 'REJECTED') {
+    return (
+      <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+        이 견적은 반려되었습니다. 수주처에 재견적을 요청할 수 있습니다.
+      </p>
+    );
+  }
+
+  return (
+    <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+      현재 상태({quote.status}) 화면은 준비 중입니다.
+    </p>
   );
 }
