@@ -21,9 +21,17 @@ const STEPS: { title: string; description: string }[] = [
 
 export type SignupIntroProps = {
   className?: string;
+  canSubmit?: boolean;
+  submitting?: boolean;
+  submitFormId?: string;
 };
 
-export default function SignupIntro({ className }: SignupIntroProps) {
+export default function SignupIntro({
+  className,
+  canSubmit = false,
+  submitting = false,
+  submitFormId = 'signup-account-form',
+}: SignupIntroProps) {
   const currentStep: SignupStep = 2;
 
   return (
@@ -41,6 +49,11 @@ export default function SignupIntro({ className }: SignupIntroProps) {
             <p className="max-w-xl text-sm leading-relaxed text-slate-500 md:text-[15px]">
               로그인에 사용할 이메일·비밀번호를 입력하고 필수 약관에 동의해 주세요.
             </p>
+            {!canSubmit ? (
+              <p className="text-xs font-medium text-amber-700">
+                필수 입력/약관 동의/OCR 검증이 완료되어야 가입할 수 있습니다.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 self-start sm:gap-3">
@@ -55,13 +68,14 @@ export default function SignupIntro({ className }: SignupIntroProps) {
               </Link>
             </Button>
             <Button
-              asChild
-              className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:px-5"
+              type="submit"
+              form={submitFormId}
+              disabled={!canSubmit || submitting}
+              title="필수 입력과 약관 동의가 완료되면 활성화됩니다"
+              className="h-10 rounded-xl px-4 text-sm font-semibold shadow-sm sm:px-5"
             >
-              <Link href="/signup/complete">
-                가입 완료하기
-                <ChevronRight className="ml-0.5 h-4 w-4" aria-hidden />
-              </Link>
+              {submitting ? '가입 처리 중...' : '가입 완료하기'}
+              <ChevronRight className="ml-0.5 h-4 w-4" aria-hidden />
             </Button>
           </div>
         </div>

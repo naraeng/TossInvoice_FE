@@ -26,7 +26,7 @@ export default function ReasonContainer() {
     },
     {
       icon: '🛡️',
-      title: '조건부 안전결제',
+      title: '조건부 안전거래',
       description: (
         <>
           선금/잔금/납품완료 등<br /> 조건이 충족돼야만

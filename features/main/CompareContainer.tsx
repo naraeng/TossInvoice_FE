@@ -10,7 +10,7 @@ export default function CompareContainer() {
     '거래처 검색 한 번으로 검증된 정보 연결',
     'OCR + 은행 검증으로 통록 즉시 신뢰',
     '계좌 변경 자동 동기화·거래처 즉시 알림',
-    '조건부 안전결제로 사기 피해 0건',
+    '조건부 안전거래로 사기 피해 0건',
   ];
 
   return (
@@ -44,7 +44,7 @@ export default function CompareContainer() {
 
           <article className="h-full rounded-3xl border border-blue-300 bg-gradient-to-br from-blue-600 to-blue-700 p-8 text-white shadow-lg">
             <div className="mb-6 inline-block rounded-full bg-white/20 px-3 py-1.5">
-              <p className="text-xs font-semibold text-white">Toss Invoice 안전결제</p>
+              <p className="text-xs font-semibold text-white">Toss Invoice 안전거래</p>
             </div>
             <h3 className="text-xl font-bold">은행이 중앙에서 모든 정보를 검증</h3>
             <div className="mt-6 space-y-3">

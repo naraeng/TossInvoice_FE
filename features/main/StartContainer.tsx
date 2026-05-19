@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function StartContainer() {
   const changeRiskCases = [
     { type: '일반 변경', example: '담당자 연락처 단일 변경', action: '알림 후 확인' },
@@ -17,12 +19,12 @@ export default function StartContainer() {
             </h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-100">
+            <Link href="/signup" className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-100">
               회원가입 하러가기
-            </button>
-            <button className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
+            </Link>
+            <Link href="/login" className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
               로그인 하러가기
-            </button>
+            </Link>
           </div>
         </div>
       </section>

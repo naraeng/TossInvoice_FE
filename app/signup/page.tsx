@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import PageContainer from '@/components/layout/PageContainer';
 import InfoPreview from '@/features/signup/document/InfoPreview';
 import StepHeader from '@/features/signup/document/StepHeader';
 
@@ -11,7 +12,7 @@ export default function SignupPage() {
   const [ocrGateStatus, setOcrGateStatus] = useState<OcrGateStatus>('idle');
 
   return (
-    <div className="mx-auto w-full max-w-screen-xl px-6 pb-8 pt-8 md:px-10">
+    <PageContainer className="pb-8 pt-8">
       <StepHeader currentStep={1} canProceedToAccount={ocrGateStatus === 'matched'} />
       <div className="mt-8 grid grid-cols-1 gap-10 lg:mt-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)] lg:gap-x-10 xl:gap-x-12">
         <div className="min-w-0">
@@ -21,6 +22,6 @@ export default function SignupPage() {
           <InfoPreview ocrGateStatus={ocrGateStatus} />
         </aside>
       </div>
-    </div>
+    </PageContainer>
   );
 }

@@ -1,52 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import type { TradeApiRow } from '@/features/trade/types';
 
 type Period = 'daily' | 'monthly' | 'yearly';
 
-const graphData = {
-  daily: {
-    title: '일별 거래 추이',
-    description: '최근 7일 발주·수주 건수',
-    labels: ['목', '금', '토', '일', '월', '화', '수'],
-    unit: '건',
-    values: [
-      { order: 34, receive: 22 },
-      { order: 48, receive: 38 },
-      { order: 28, receive: 18 },
-      { order: 20, receive: 14 },
-      { order: 62, receive: 44 },
-      { order: 54, receive: 59 },
-      { order: 72, receive: 51 },
-    ],
-  },
-  monthly: {
-    title: '월별 거래 추이',
-    description: '최근 6개월 발주·수주 금액 (단위: 만원)',
-    labels: ['12월', '1월', '2월', '3월', '4월', '5월'],
-    unit: '만원',
-    values: [
-      { order: 420, receive: 310 },
-      { order: 520, receive: 420 },
-      { order: 360, receive: 470 },
-      { order: 680, receive: 520 },
-      { order: 580, receive: 680 },
-      { order: 840, receive: 630 },
-    ],
-  },
-  yearly: {
-    title: '년도별 거래 추이',
-    description: '최근 5년 발주·수주 금액 (단위: 만원)',
-    labels: ['2022', '2023', '2024', '2025', '2026'],
-    unit: '만원',
-    values: [
-      { order: 3200, receive: 2800 },
-      { order: 4600, receive: 3900 },
-      { order: 5400, receive: 5100 },
-      { order: 7200, receive: 6400 },
-      { order: 8600, receive: 7300 },
-    ],
-  },
+type GraphData = {
+  title: string;
+  description: string;
+  labels: string[];
+  unit: string;
+  values: { order: number; receive: number }[];
 };
 
 const periodLabels: Record<Period, string> = {
@@ -55,21 +20,113 @@ const periodLabels: Record<Period, string> = {
   yearly: '년도별',
 };
 
-export default function MonthlyGraph() {
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+function buildGraphData(trades: TradeApiRow[]): Record<Period, GraphData> {
+  const now = new Date();
+
+  // ── 일별: 최근 7일 건수 ───────────────────────────────────────────────────
+  const dayLabels: string[] = [];
+  const dayValues: { order: number; receive: number }[] = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dayLabels.push(DAY_NAMES[d.getDay()]);
+    const dateStr = d.toISOString().slice(0, 10); // YYYY-MM-DD
+    const dayTrades = trades.filter((t) => t.createdAt.slice(0, 10) === dateStr);
+    dayValues.push({
+      order: dayTrades.filter((t) => t.role === 'BUYER').length,
+      receive: dayTrades.filter((t) => t.role === 'SELLER').length,
+    });
+  }
+
+  // ── 월별: 최근 6개월 금액 (만원) ─────────────────────────────────────────
+  const monthLabels: string[] = [];
+  const monthValues: { order: number; receive: number }[] = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthLabels.push(`${d.getMonth() + 1}월`);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const monthTrades = trades.filter((t) => {
+      const td = new Date(t.createdAt);
+      return td.getFullYear() === y && td.getMonth() === m;
+    });
+    monthValues.push({
+      order: Math.round(
+        monthTrades.filter((t) => t.role === 'BUYER').reduce((s, t) => s + (t.totalAmount ?? 0), 0) / 10000,
+      ),
+      receive: Math.round(
+        monthTrades.filter((t) => t.role === 'SELLER').reduce((s, t) => s + (t.totalAmount ?? 0), 0) / 10000,
+      ),
+    });
+  }
+
+  // ── 년도별: 최근 5년 금액 (만원) ─────────────────────────────────────────
+  const yearLabels: string[] = [];
+  const yearValues: { order: number; receive: number }[] = [];
+  const currentYear = now.getFullYear();
+
+  for (let y = currentYear - 4; y <= currentYear; y++) {
+    yearLabels.push(String(y));
+    const yearTrades = trades.filter((t) => new Date(t.createdAt).getFullYear() === y);
+    yearValues.push({
+      order: Math.round(
+        yearTrades.filter((t) => t.role === 'BUYER').reduce((s, t) => s + (t.totalAmount ?? 0), 0) / 10000,
+      ),
+      receive: Math.round(
+        yearTrades.filter((t) => t.role === 'SELLER').reduce((s, t) => s + (t.totalAmount ?? 0), 0) / 10000,
+      ),
+    });
+  }
+
+  return {
+    daily: {
+      title: '일별 거래 추이',
+      description: '최근 7일 발주·수주 건수',
+      labels: dayLabels,
+      unit: '건',
+      values: dayValues,
+    },
+    monthly: {
+      title: '월별 거래 추이',
+      description: '최근 6개월 발주·수주 금액 (단위: 만원)',
+      labels: monthLabels,
+      unit: '만원',
+      values: monthValues,
+    },
+    yearly: {
+      title: '년도별 거래 추이',
+      description: '최근 5년 발주·수주 금액 (단위: 만원)',
+      labels: yearLabels,
+      unit: '만원',
+      values: yearValues,
+    },
+  };
+}
+
+type Props = { trades?: TradeApiRow[] };
+
+export default function MonthlyGraph({ trades = [] }: Props) {
   const [period, setPeriod] = useState<Period>('monthly');
   const [isRising, setIsRising] = useState(false);
+
+  const graphData = useMemo(() => buildGraphData(trades), [trades]);
   const selectedData = graphData[period];
+
+  // 0 방어: 모든 값이 0일 때 막대 높이 계산이 깨지지 않도록
   const maxValue = Math.max(
-    ...selectedData.values.flatMap((value) => [value.order, value.receive])
+    ...selectedData.values.flatMap((v) => [v.order, v.receive]),
+    1,
   );
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setIsRising(true);
-    });
-
+    setIsRising(false);
+    const frame = window.requestAnimationFrame(() => setIsRising(true));
     return () => window.cancelAnimationFrame(frame);
-  }, [period]);
+  }, [period, trades]);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-[0_10px_35px_-30px_rgba(15,23,42,0.4)]">
@@ -84,12 +141,9 @@ export default function MonthlyGraph() {
               key={item}
               type="button"
               onClick={() => {
-                if (period !== item) {
-                  setIsRising(false);
-                  setPeriod(item);
-                }
+                if (period !== item) setPeriod(item);
               }}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+              className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                 period === item ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
               }`}
             >
@@ -117,8 +171,7 @@ export default function MonthlyGraph() {
                       style={{ height: isRising ? `${orderHeight}%` : '0%' }}
                     />
                     <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white opacity-0 shadow-sm transition group-hover:opacity-100">
-                      발주 {data.order.toLocaleString()}
-                      {selectedData.unit}
+                      발주 {data.order.toLocaleString()}{selectedData.unit}
                     </div>
                   </div>
                   <div className="group relative flex h-full items-end">
@@ -127,8 +180,7 @@ export default function MonthlyGraph() {
                       style={{ height: isRising ? `${receiveHeight}%` : '0%' }}
                     />
                     <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white opacity-0 shadow-sm transition group-hover:opacity-100">
-                      수주 {data.receive.toLocaleString()}
-                      {selectedData.unit}
+                      수주 {data.receive.toLocaleString()}{selectedData.unit}
                     </div>
                   </div>
                 </div>
