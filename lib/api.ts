@@ -67,6 +67,22 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   config.withCredentials = true;
+
+  // multipart/form-data: browser must set Content-Type with boundary (not application/json)
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    const headers = config.headers;
+    if (headers && typeof headers === 'object') {
+      if ('delete' in headers && typeof headers.delete === 'function') {
+        headers.delete('Content-Type');
+        headers.delete('content-type');
+      } else {
+        const record = headers as Record<string, unknown>;
+        delete record['Content-Type'];
+        delete record['content-type'];
+      }
+    }
+  }
+
   return config;
 });
 

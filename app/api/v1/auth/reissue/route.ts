@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_BASE_URL =
   process.env.BACKEND_INTERNAL_URL?.trim() || 'https://api.tossinvoice.site';
 const REFRESH_COOKIE_NAME = 'ti-refresh-token';
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 14; // 14 days
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE_NAME)?.value;
   if (!refreshToken) {
     return NextResponse.json(
