@@ -1,5 +1,5 @@
 export type TradeRole = 'SELLER' | 'BUYER';
-export type TradePhase = 'ACTIVE' | 'COMPLETED';
+export type TradePhase = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
 export type TradeCompanyMini = {
   userId: number;

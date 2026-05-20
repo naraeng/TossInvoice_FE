@@ -68,9 +68,14 @@ export default function DashboardPage() {
   const [companyName, setCompanyName] = useState('');
   const [ceoName, setCeoName] = useState('');
 
-  // Dashboard Home KPI
-  const [inProgressCount, setInProgressCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
+  // Dashboard Home KPI — 백엔드 spec 그대로 4종 분리 표시
+  const [todayActiveCount, setTodayActiveCount] = useState(0);
+  const [sellingTotal, setSellingTotal] = useState(0);
+  const [sellingAwaitingCounterSign, setSellingAwaitingCounterSign] = useState(0);
+  const [buyingTotal, setBuyingTotal] = useState(0);
+  const [buyingPoInProgress, setBuyingPoInProgress] = useState(0);
+  const [buyingDeliveryWaiting, setBuyingDeliveryWaiting] = useState(0);
+  const [buyingInspectionWaiting, setBuyingInspectionWaiting] = useState(0);
   const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0);
   const [depositCount, setDepositCount] = useState(0);
   const [balanceCount, setBalanceCount] = useState(0);
@@ -102,29 +107,23 @@ export default function DashboardPage() {
         const company = meResult?.companyName ?? '';
         const ceo = meResult?.ceoName ?? '';
 
-        // Dashboard Home KPI
+        // Dashboard Home KPI — 백엔드 spec 그대로 분리해서 state에 보존
         const home = (homeRes.data as DashboardHomeResponse)?.result;
         const selling = home?.sellingInProgress;
         const buying = home?.buyingInProgress;
         const payment = home?.paymentWaiting;
         const monthlyBuy = home?.thisMonthBuyAmount;
 
-        // pendingCount = 양측에서 "내 행동이 필요한" 건수 합산
-        // - sellingInProgress.awaitingCounterSign: 발주처 서명 대기(수주처 입장)
-        // - buyingInProgress.poInProgress: PO 작성 중(발주처 입장)
-        // - buyingInProgress.deliveryWaiting: 배송 대기(발주처 입장)
-        // - buyingInProgress.inspectionWaiting: 검수 대기(발주처 입장)
-        const pending =
-          (selling?.awaitingCounterSign ?? 0) +
-          (buying?.poInProgress ?? 0) +
-          (buying?.deliveryWaiting ?? 0) +
-          (buying?.inspectionWaiting ?? 0);
-
         setTrades(fetched);
         setCompanyName(company);
         setCeoName(ceo);
-        setInProgressCount(home?.todayActiveCount ?? 0);
-        setPendingCount(pending);
+        setTodayActiveCount(home?.todayActiveCount ?? 0);
+        setSellingTotal(selling?.total ?? 0);
+        setSellingAwaitingCounterSign(selling?.awaitingCounterSign ?? 0);
+        setBuyingTotal(buying?.total ?? 0);
+        setBuyingPoInProgress(buying?.poInProgress ?? 0);
+        setBuyingDeliveryWaiting(buying?.deliveryWaiting ?? 0);
+        setBuyingInspectionWaiting(buying?.inspectionWaiting ?? 0);
         setPendingPaymentAmount(payment?.amount ?? 0);
         setDepositCount(payment?.depositCount ?? 0);
         setBalanceCount(payment?.balanceCount ?? 0);
@@ -190,8 +189,13 @@ export default function DashboardPage() {
         <DashboardHeader
           companyName={companyName}
           ceoName={ceoName}
-          inProgressCount={inProgressCount}
-          pendingCount={pendingCount}
+          todayActiveCount={todayActiveCount}
+          sellingTotal={sellingTotal}
+          sellingAwaitingCounterSign={sellingAwaitingCounterSign}
+          buyingTotal={buyingTotal}
+          buyingPoInProgress={buyingPoInProgress}
+          buyingDeliveryWaiting={buyingDeliveryWaiting}
+          buyingInspectionWaiting={buyingInspectionWaiting}
           pendingPaymentAmount={pendingPaymentAmount}
           depositCount={depositCount}
           balanceCount={balanceCount}

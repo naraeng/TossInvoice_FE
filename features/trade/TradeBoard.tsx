@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { ArrowDownUp, Check, ClipboardList, Loader2, Plus } from 'lucide-react';
+import { ArrowDownUp, Check, ClipboardList, Loader2, Plus, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { createDraftQuoteViaApi } from '@/lib/documents/create-draft-quote-client';
@@ -37,9 +37,20 @@ type CompletedRow = {
   completedDate: string;
 };
 
+type CancelledRow = {
+  trade: TradeApiRow;
+  id: string;
+  docNo: string; // INV가 없으면 PI 시점 대체 표기
+  counterpart: string;
+  itemSummary: string;
+  amount: string;
+  cancelledDate: string;
+};
+
 const PHASE_OPTIONS: { id: TradePhase; label: string }[] = [
   { id: 'ACTIVE', label: '거래중' },
   { id: 'COMPLETED', label: '완료거래' },
+  { id: 'CANCELLED', label: '취소거래' },
 ];
 
 const ROLE_OPTIONS_ACTIVE: { id: TradeRole; label: string }[] = [
@@ -50,6 +61,11 @@ const ROLE_OPTIONS_ACTIVE: { id: TradeRole; label: string }[] = [
 const ROLE_OPTIONS_COMPLETED: { id: TradeRole; label: string }[] = [
   { id: 'SELLER', label: '수주거래' },
   { id: 'BUYER', label: '발주거래' },
+];
+
+const ROLE_OPTIONS_CANCELLED: { id: TradeRole; label: string }[] = [
+  { id: 'SELLER', label: '수주측' },
+  { id: 'BUYER', label: '발주측' },
 ];
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -132,6 +148,20 @@ function toCompletedRow(trade: TradeApiRow): CompletedRow {
   };
 }
 
+function toCancelledRow(trade: TradeApiRow): CancelledRow {
+  const counterpart = trade.role === 'SELLER' ? trade.buyer : trade.seller;
+  return {
+    trade,
+    id: String(trade.tradeId),
+    // 인보이스가 없으면 거래 번호로 대체 표기
+    docNo: trade.invoiceDocNumber || `TRADE-${trade.tradeId}`,
+    counterpart: counterpart.companyName,
+    itemSummary: trade.itemsSummary || '-',
+    amount: formatWon(trade.totalAmount),
+    cancelledDate: formatYmd(trade.createdAt),
+  };
+}
+
 function parseTradeDate(value: string) {
   return new Date(value.replaceAll('.', '-')).getTime();
 }
@@ -207,7 +237,17 @@ export default function TradeBoard({
     return trades.map(toCompletedRow);
   }, [trades, activePhase]);
 
-  const roleOptions = activePhase === 'COMPLETED' ? ROLE_OPTIONS_COMPLETED : ROLE_OPTIONS_ACTIVE;
+  const cancelledRows = useMemo<CancelledRow[]>(() => {
+    if (activePhase !== 'CANCELLED') return [];
+    return trades.map(toCancelledRow);
+  }, [trades, activePhase]);
+
+  const roleOptions =
+    activePhase === 'COMPLETED'
+      ? ROLE_OPTIONS_COMPLETED
+      : activePhase === 'CANCELLED'
+        ? ROLE_OPTIONS_CANCELLED
+        : ROLE_OPTIONS_ACTIVE;
   const activeSortLabel =
     SORT_OPTIONS.find((option) => option.id === activeSort)?.label ?? '최근 거래순';
 
@@ -231,6 +271,8 @@ export default function TradeBoard({
                 >
                   {option.id === 'ACTIVE' ? (
                     <ClipboardList className="h-3.5 w-3.5" />
+                  ) : option.id === 'CANCELLED' ? (
+                    <XCircle className="h-3.5 w-3.5" />
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
@@ -381,6 +423,70 @@ export default function TradeBoard({
                 </tbody>
               </table>
             </div>
+          ) : activePhase === 'CANCELLED' ? (
+            <div>
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '9%' }} />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-[11px] font-medium text-slate-400">
+                    <th className="pb-3 pl-2 pr-2">거래 번호</th>
+                    <th className="pb-3 pl-0 pr-2">거래처</th>
+                    <th className="pb-3 pl-0 pr-2">품목</th>
+                    <th className="pb-3 pl-0 pr-2">총액</th>
+                    <th className="pb-3 pl-0 pr-2">취소일</th>
+                    <th className="pb-3 pl-0 pr-2 text-right">확인</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!loading && cancelledRows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-sm text-slate-500">
+                        취소된 거래가 없습니다.
+                      </td>
+                    </tr>
+                  )}
+                  {cancelledRows.map((row) => (
+                    <tr key={row.id} className="border-b border-slate-100 last:border-0">
+                      <td className="py-3 pl-2 pr-2">
+                        <div className="rounded-lg border border-rose-200 bg-rose-50/40 px-3 py-2 text-xs font-semibold text-slate-700">
+                          <p>{row.docNo}</p>
+                          <p className="mt-1 text-[10px] text-rose-500">취소</p>
+                        </div>
+                      </td>
+                      <td className="py-3 pl-0 pr-2 text-slate-600">{row.counterpart}</td>
+                      <td className="py-3 pl-0 pr-2 font-semibold text-slate-500 line-through decoration-slate-300">
+                        {row.itemSummary}
+                      </td>
+                      <td className="py-3 pl-0 pr-2 font-semibold text-slate-500">{row.amount}</td>
+                      <td className="py-3 pl-0 pr-2 text-slate-500">{row.cancelledDate}</td>
+                      <td className="py-3 pl-0 pr-2 text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={loading || viewingTradeId === row.trade.tradeId}
+                          onClick={() => void handleViewTrade(row.trade)}
+                          className="h-8 w-20 rounded-lg border-slate-300 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          {viewingTradeId === row.trade.tradeId ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            '보기 →'
+                          )}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div>
               <table className="w-full table-fixed text-sm">
@@ -447,7 +553,7 @@ export default function TradeBoard({
                       </td>
                       <td className="py-4 pl-0 pr-2 text-slate-600">{row.date}</td>
                       <td className="py-4 pl-0 pr-2">
-                        <div className="flex flex-col items-center gap-1.5">
+                        <div className="flex justify-center">
                           <Button
                             type="button"
                             size="sm"
@@ -460,14 +566,6 @@ export default function TradeBoard({
                             ) : (
                               '거래보기'
                             )}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 w-24 rounded-lg border-slate-200 px-3 text-xs font-semibold text-slate-500"
-                          >
-                            상세보기
                           </Button>
                         </div>
                       </td>

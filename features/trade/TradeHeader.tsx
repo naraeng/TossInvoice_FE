@@ -5,12 +5,16 @@ export type TradeHeaderProps = {
 };
 
 export default function TradeHeader({
-  // totalPartners,
+  totalPartners,
   activePartners,
   newPartnersThisMonth,
 }: TradeHeaderProps) {
+  // 백엔드 spec 그대로 — 본인 기준 거래처 단위 KPI 3종.
+  //   - 총 거래처: 거래한 적 있는 회사 수 (CANCELLED 제외)
+  //   - 거래 중: 진행 중 거래(status NOT IN COMPLETED, CANCELLED)가 있는 회사 수
+  //   - 이번 달 신규: 이번 달(KST) 처음 거래를 시작한 회사 수
   const statCards = [
-    // { label: '총 거래처', value: totalPartners, valueClassName: 'text-slate-900' },
+    { label: '총 거래처', value: totalPartners, valueClassName: 'text-slate-900' },
     { label: '거래 중', value: activePartners, valueClassName: 'text-blue-600' },
     { label: '이번 달 신규', value: newPartnersThisMonth, valueClassName: 'text-emerald-600' },
   ] as const;

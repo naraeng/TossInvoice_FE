@@ -15,6 +15,7 @@ const CLIENT_STEPS: { status: QuoteStatus; label: string }[] = [
   { status: 'PO_CONFIRMED', label: 'PO 확정' },
 ];
 
+// 전체 워크플로우 순서 — done 판정용. 화면에 표시되는 번호와는 무관.
 const ORDER: QuoteStatus[] = [
   'DRAFT',
   'ISSUED',
@@ -42,8 +43,9 @@ export function StatusStepper({
 
   return (
     <ol className="space-y-3">
-      {steps.map((step) => {
+      {steps.map((step, displayIdx) => {
         const idx = stepIndex(step.status);
+        // done/active 판정은 전체 워크플로우 순서(ORDER) 기준
         const done = idx <= current && currentStatus !== 'REJECTED';
         const active = step.status === currentStatus;
 
@@ -58,7 +60,9 @@ export function StatusStepper({
                     : 'bg-slate-100 text-slate-400'
               }`}
             >
-              {done && !active ? '✓' : idx + 1}
+              {/* 표시 번호는 steps 배열 내 순서(1-based). ORDER 인덱스가 아니라
+                  사용자 시각에서 보이는 단계 번호(1, 2, 3, 4, 5)로 그린다. */}
+              {done && !active ? '✓' : displayIdx + 1}
             </span>
             <span
               className={`text-sm font-medium ${
