@@ -1,4 +1,3 @@
-import type { TradeRole } from '@/features/trade/types';
 import type { QuoteStatus } from '@/types/documents/document';
 
 import type { TradeDetailResult } from './trade-detail-types';
@@ -9,17 +8,11 @@ function hasBuyerPoSignature(po: TradeDetailResult['purchaseOrder']): boolean {
 }
 
 /**
- * 명세 「화면 라우팅 derive 규칙」— status + role + PO/invoice 존재 여부
+ * 명세 「화면 라우팅 derive 규칙」— backend status + PO/Invoice 존재 여부만으로 결정
+ * (role-perspective 분기는 화면 layer에서 처리)
  */
-/**
- * @param perspectiveRole 거래 목록 탭(수주중/발주중) 기준 역할 — API `role`과 동일해야 하나 탭 기준으로 고정
- */
-export function deriveQuoteStatusFromTrade(
-  detail: TradeDetailResult,
-  perspectiveRole?: TradeRole,
-): QuoteStatus {
+export function deriveQuoteStatusFromTrade(detail: TradeDetailResult): QuoteStatus {
   const { status, purchaseOrder: po, invoice: inv } = detail;
-  const role = perspectiveRole ?? detail.role;
 
   if (status === 'CANCELLED') return 'REJECTED';
 
@@ -34,12 +27,12 @@ export function deriveQuoteStatusFromTrade(
   if (status === 'PENDING_SELLER_SIGN') return 'PO_ISSUED';
 
   if (status === 'PENDING_PO') {
-    if (role === 'BUYER') {
-      if (!po) return 'ISSUED';
-      if (!hasBuyerPoSignature(po)) return 'PO_DRAFT';
-      return 'PO_ISSUED';
-    }
-    return 'ISSUED';
+    // PO가 없으면 아직 발주처가 작성 중 아님 → PI 발행 상태
+    if (!po) return 'ISSUED';
+    // PO 객체는 있지만 발주처 서명 전 → 작성 중 (양측 모두 PO_DRAFT 진행)
+    if (!hasBuyerPoSignature(po)) return 'PO_DRAFT';
+    // 발주처 서명 완료 → PO_ISSUED (수주처 서명 대기)
+    return 'PO_ISSUED';
   }
 
   return detail.proformaInvoice ? 'ISSUED' : 'DRAFT';

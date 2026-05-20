@@ -10,11 +10,14 @@ function parseBankAccountLine(line: string): { bank: string; account: string } {
 }
 
 export function clientCompanyFromQuote(quote: QuoteDocument): ClientCompany | null {
-  const { client, clientProfile, bankVerified } = quote;
+  const { client, clientProfile, bankVerified, clientStatus } = quote;
   if (!client.companyName && !client.companyId) return null;
 
   const businessNo = clientProfile?.businessNo || client.companyId;
   const { bank, account } = parseBankAccountLine(clientProfile?.bankAccount ?? '');
+
+  // clientStatus 원본을 그대로 복원해야 견적서 작성 화면에서 위험도(주의/위험) 배지가 유지됨
+  const status = clientStatus ?? (bankVerified ? '정상' : '');
 
   return {
     id: businessNo || client.companyId,
@@ -25,7 +28,7 @@ export function clientCompanyFromQuote(quote: QuoteDocument): ClientCompany | nu
     account,
     bankAccount: clientProfile?.bankAccount ?? '',
     verified: bankVerified ?? clientProfile?.verified ?? false,
-    status: bankVerified ? '정상' : '',
+    status,
     businessType: '',
     address: clientProfile?.address ?? '',
     phone: clientProfile?.contact?.split('·')[0]?.trim() ?? '',

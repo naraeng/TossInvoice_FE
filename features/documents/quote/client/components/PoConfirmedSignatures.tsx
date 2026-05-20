@@ -23,9 +23,13 @@ export function PoConfirmedSignatures({ quote }: Props) {
   const poSupplierSig = getPoSupplierSignature(quote);
   const clientSig = getPoClientSignature(quote);
   const supplierRep =
-    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.supplier.companyName ??
+    '';
   const clientRep =
-    quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+    quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.client.companyName ??
+    '';
 
   return (
     <section className="mx-8 border-t border-slate-300/80 py-6">

@@ -37,7 +37,7 @@ export function ClientQuoteInvoiceIssuedSidebar({
   onDownloadPdf,
   onContactSupplier,
 }: Props) {
-  const { balanceLabel } = calcPoPaymentAmounts(quote.totals);
+  const { balanceLabel } = calcPoPaymentAmounts(quote);
   const { bankLine, holder } = formatSupplierBankDisplay(quote);
   const invNo = quote.invoiceDocumentNo ?? 'Invoice';
 

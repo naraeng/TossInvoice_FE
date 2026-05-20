@@ -67,8 +67,12 @@ export function executeQuoteAction(
     const merged = patch ? ({ ...current, ...patch, id: quoteId } as QuoteDocument) : current;
     const signerName =
       party === 'SUPPLIER'
-        ? (merged.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규')
-        : (merged.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수');
+        ? (merged.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+            merged.supplier.companyName ??
+            '')
+        : (merged.clientProfile?.representative.replace(/\s*대표\s*$/, '') ??
+            merged.client.companyName ??
+            '');
     const draftPoSig = findSignature(merged, party, scope);
     const signed = {
       ...merged,
@@ -78,7 +82,6 @@ export function executeQuoteAction(
         scope,
         signedAt: new Date().toISOString(),
         signerName: draftPoSig?.signerName ?? signerName,
-        ipAddress: party === 'SUPPLIER' ? '203.241.128.45' : '203.241.128.99',
         signatureImage: draftPoSig?.signatureImage,
       }),
     };

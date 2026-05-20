@@ -1,5 +1,6 @@
 import { ChevronRight, Truck } from 'lucide-react';
 
+import { resolveDownPaymentPercent } from '@/lib/documents/payment-terms';
 import type { QuoteDocument } from '@/types/documents/document';
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 
 export function SupplierQuotePoIssuedHeader({ quote }: Props) {
   const poNo = quote.poDocumentNo ?? 'PO-발행';
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
 
   return (
     <header className="space-y-4">
@@ -26,7 +28,7 @@ export function SupplierQuotePoIssuedHeader({ quote }: Props) {
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
             발주처(
             <span className="font-semibold text-slate-700">{quote.client.companyName}</span>
-            )의 발주서가 도착했습니다. 내용을 확인하고 서명하면 선금(30%)이 입금됩니다.
+            )의 발주서가 도착했습니다. 내용을 확인하고 서명하면 선금({downPaymentPercent}%)이 입금됩니다.
           </p>
         </div>
 

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { storeAuthTokens } from '@/lib/auth-storage';
 import { saveMemberProfile } from '@/lib/auth-user';
+import { resolveErrorMessageFromError } from '@/lib/error-messages';
 
 const REMEMBER_KEY = 'ti-login-remember';
 
@@ -33,12 +34,27 @@ export default function LoginFormCard() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [expiredNotice, setExpiredNotice] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(REMEMBER_KEY);
       if (stored !== null) {
         setRemember(stored === '1');
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // 세션 만료/강제 로그아웃으로 /login 으로 튕긴 경우 메시지를 1회 표시
+    try {
+      const reason = sessionStorage.getItem('auth-redirect-reason');
+      if (reason === 'session-expired') {
+        setExpiredNotice('세션이 만료되었어요. 다시 로그인해 주세요.');
+        sessionStorage.removeItem('auth-redirect-reason');
+      } else if (reason === 'logged-out-other-tab') {
+        setExpiredNotice('다른 탭에서 로그아웃되어 다시 로그인해 주세요.');
+        sessionStorage.removeItem('auth-redirect-reason');
       }
     } catch {
       /* ignore */
@@ -63,6 +79,12 @@ export default function LoginFormCard() {
         <p className="text-sm leading-relaxed text-slate-500">안전한 B2B 거래의 시작</p>
       </div>
 
+      {expiredNotice ? (
+        <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">
+          {expiredNotice}
+        </div>
+      ) : null}
+
       <form
         className="mt-12 space-y-10"
         onSubmit={async (e) => {
@@ -78,32 +100,22 @@ export default function LoginFormCard() {
             });
 
             const data = res.data as {
-              result?: { accessToken?: string };
+              result?: { accessToken?: string; refreshToken?: string };
               message?: string;
             };
             const accessToken = data?.result?.accessToken;
+            const refreshToken = data?.result?.refreshToken;
             if (!accessToken) {
               setSubmitError('로그인 응답에 accessToken이 없습니다.');
               return;
             }
 
-            storeAuthTokens({ accessToken, rememberLogin: remember });
+            // refreshToken도 함께 저장해야 reissue 흐름이 동작함
+            storeAuthTokens({ accessToken, refreshToken, rememberLogin: remember });
             saveMemberProfile({ email: email.trim() }, remember);
             router.push('/dashboard');
           } catch (error: unknown) {
-            if (typeof error === 'object' && error && 'response' in error) {
-              const response = (
-                error as { response?: { data?: { errorCode?: string; message?: string } } }
-              ).response;
-              const code = response?.data?.errorCode;
-              if (code === 'AUTH_003') {
-                setSubmitError('이메일 또는 비밀번호가 올바르지 않습니다.');
-              } else {
-                setSubmitError(response?.data?.message ?? '로그인 처리 중 오류가 발생했습니다.');
-              }
-            } else {
-              setSubmitError('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-            }
+            setSubmitError(resolveErrorMessageFromError(error, '로그인 처리 중 오류가 발생했습니다.'));
           } finally {
             setIsSubmitting(false);
           }

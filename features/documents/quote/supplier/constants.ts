@@ -61,8 +61,6 @@ export const PROTECTION_FEATURES = [
   '은행 이체 로그 자동 기록',
 ] as const;
 
-export const DOWN_PAYMENT_RATIO = 0.3;
-
 export function calcTransactionFee(total: number) {
   return Math.max(Math.round(total * 0.002), 0);
 }

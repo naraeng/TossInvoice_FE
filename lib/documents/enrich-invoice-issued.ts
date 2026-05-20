@@ -6,7 +6,9 @@ export function enrichInvoiceIssued(quote: QuoteDocument): QuoteDocument {
   const now = new Date();
   const poSupplier = getPoSupplierSignature(quote);
   const signerName =
-    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.supplier.companyName ??
+    '';
 
   return {
     ...quote,
@@ -17,7 +19,6 @@ export function enrichInvoiceIssued(quote: QuoteDocument): QuoteDocument {
       scope: 'INVOICE',
       signedAt: now.toISOString(),
       signerName: poSupplier?.signerName ?? signerName,
-      ipAddress: '203.241.128.45',
       signatureImage: poSupplier?.signatureImage,
     }),
   };

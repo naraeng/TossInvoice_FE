@@ -10,8 +10,14 @@ export type MemberProfile = {
   address: string;
   bank: string;
   account: string;
+  // accountHolder는 백엔드 MyPageResponse에 존재하지 않는 필드이지만,
+  // OCR 시점에 클라이언트가 검증용으로 잠시 보관하는 경우가 있어 타입에는 남겨두되
+  // 마이페이지 표시/저장 흐름에서는 더 이상 신뢰하지 않는다.
   accountHolder: string;
   businessType: string;
+  // 등록 서류 URL — 마이페이지에서 첨부 미리보기/다운로드 용도
+  businessRegistrationUrl?: string;
+  bankbookUrl?: string;
 };
 
 const PROFILE_KEY = 'ti-member-profile';
@@ -59,6 +65,9 @@ export function saveMemberProfile(profile: Partial<MemberProfile>, rememberLogin
       account: profile.account ?? prev?.account ?? '',
       accountHolder: profile.accountHolder ?? prev?.accountHolder ?? '',
       businessType: profile.businessType ?? prev?.businessType ?? '',
+      businessRegistrationUrl:
+        profile.businessRegistrationUrl ?? prev?.businessRegistrationUrl,
+      bankbookUrl: profile.bankbookUrl ?? prev?.bankbookUrl,
     };
 
     localStorage.removeItem(PROFILE_KEY);
@@ -125,5 +134,7 @@ export function getDisplayProfile(): MemberProfile {
     account: saved?.account || '',
     accountHolder: saved?.accountHolder || '',
     businessType: saved?.businessType || '',
+    businessRegistrationUrl: saved?.businessRegistrationUrl,
+    bankbookUrl: saved?.bankbookUrl,
   };
 }

@@ -4,6 +4,11 @@ import {
   DEFAULT_SUPPLIER_PROFILE,
 } from '@/lib/documents/enrich-issued-quote';
 import { formatKRW } from '@/lib/documents/format';
+import {
+  buildPaymentMethodLabel,
+  formatPaymentTerms,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
 import { getPiSupplierSignature } from '@/lib/documents/signature-utils';
 import type { CompanyProfile } from '@/types/documents/company';
 import type { QuoteDocument } from '@/types/documents/document';
@@ -51,13 +56,13 @@ export function ProformaInvoiceDocument({ quote }: Props) {
   const supplier = quote.supplierProfile ?? DEFAULT_SUPPLIER_PROFILE;
   const client = quote.clientProfile ?? DEFAULT_CLIENT_PROFILE;
   const supplierSignature = getPiSupplierSignature(quote);
-  const paymentTerms = quote.paymentTerms ?? '선금 30% / 잔금 70%';
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
+  const paymentTerms = quote.paymentTerms ?? formatPaymentTerms(downPaymentPercent);
   const validity = quote.validityUntil
     ? `${formatDisplayDate(quote.validityUntil)}까지`
-    : '발행 후 14일';
+    : '유효기간 미정';
   const paymentMethod =
-    quote.transactionTerms?.paymentMethod ??
-    '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)';
+    quote.transactionTerms?.paymentMethod ?? buildPaymentMethodLabel(downPaymentPercent);
   const deliverySchedule =
     quote.transactionTerms?.deliverySchedule ?? '2026.05.25 (월) — 결제 후 7일 이내';
 
@@ -71,13 +76,34 @@ export function ProformaInvoiceDocument({ quote }: Props) {
   return (
     <article className="overflow-hidden border border-slate-200 bg-white shadow-[0_8px_32px_-20px_rgba(0,0,0,0.12)]">
       <div className="flex items-center justify-between gap-4 px-10 pb-2 pt-6">
-        {quote.bankVerified ? (
-          <span className="rounded-full bg-[#EAFAEF] px-3 py-1 text-xs font-medium text-emerald-600">
-            ✓ 은행 검증 거래
-          </span>
-        ) : (
-          <span />
-        )}
+        {/* 발주처 위험도 배지: clientStatus 원본을 우선, 없으면 bankVerified로 fallback */}
+        {(() => {
+          const status =
+            quote.clientStatus ??
+            (quote.bankVerified === true ? '정상' : quote.bankVerified === false ? undefined : undefined);
+          if (status === '정상') {
+            return (
+              <span className="rounded-full bg-[#EAFAEF] px-3 py-1 text-xs font-medium text-emerald-600">
+                ✓ 검증 거래
+              </span>
+            );
+          }
+          if (status === '주의') {
+            return (
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                ⚠ 주의 거래처
+              </span>
+            );
+          }
+          if (status === '위험') {
+            return (
+              <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                🚨 위험 거래처
+              </span>
+            );
+          }
+          return <span />;
+        })()}
         <div className="text-right">
           <p className="text-[10px] font-medium tracking-widest text-[#8E8E8E] uppercase">
             Proforma Invoice

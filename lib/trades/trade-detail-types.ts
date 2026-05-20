@@ -32,6 +32,8 @@ export type PurchaseOrderDetail = {
   purchaseOrderDatetime: string;
   desiredDeliveryDate?: string;
   confirmedDeliveryDate?: string;
+  /** 발주처가 PO 발행 시 입력한 배송 주소 (Phase A 백엔드 추가) */
+  shippingAddress?: string | null;
   buyerSignatureUrl?: string | null;
   buyerSignedAt?: string | null;
   sellerSignatureUrl?: string | null;
@@ -50,6 +52,9 @@ export type InvoiceDetail = {
   sellerSignedAt?: string;
   buyerSignatureUrl?: string;
   buyerSignedAt?: string;
+  /** Invoice 발행 시점에 확정된 수주처 계좌 스냅샷 — PO 스냅샷보다 우선 */
+  sellerAccountSnapshot?: string | null;
+  sellerBankSnapshot?: string | null;
   balancePaidAt?: string | null;
   balanceAmount?: number | null;
 };

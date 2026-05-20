@@ -17,8 +17,8 @@ type Props = {
 };
 
 export function SupplierQuotePoIssuedSidebar({ quote, busy, canSign, onSignPo, onReject }: Props) {
-  const rep = quote.supplierProfile?.representative ?? '박장규 대표';
-  const { downPaymentLabel } = calcPoPaymentAmounts(quote.totals);
+  const rep = quote.supplierProfile?.representative ?? `${quote.supplier.companyName ?? ''} 대표`.trim();
+  const { downPaymentLabel } = calcPoPaymentAmounts(quote);
 
   return (
     <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.25)]">

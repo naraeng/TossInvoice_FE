@@ -8,6 +8,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import TradeBoard from '@/features/trade/TradeBoard';
 import TradeHeader from '@/features/trade/TradeHeader';
 import { apiClient } from '@/lib/api';
+import { useAuthGuard } from '@/lib/auth-guard';
 import type { TradeApiRow, TradePageResponse, TradePhase, TradeRole } from '@/features/trade/types';
 
 const PAGE_SIZE = 5;
@@ -19,6 +20,7 @@ type TradesApiResponse = {
 };
 
 function TradePageContent() {
+  const { ready } = useAuthGuard();
   const searchParams = useSearchParams();
   const initialRole: TradeRole = searchParams.get('tab') === 'purchase' ? 'BUYER' : 'SELLER';
 
@@ -71,11 +73,12 @@ function TradePageContent() {
   }, []);
 
   useEffect(() => {
+    if (!ready) return;
     const fetchData = async () => {
       await fetchTrades(activeRole, activePhase, currentPage);
     };
     void fetchData();
-  }, [fetchTrades, activeRole, activePhase, currentPage]);
+  }, [ready, fetchTrades, activeRole, activePhase, currentPage]);
 
   const handleRoleChange = (role: TradeRole) => {
     if (role === activeRole || loading) return;
@@ -93,6 +96,16 @@ function TradePageContent() {
     if (page < 1 || page > totalPages || page === currentPage || loading) return;
     setCurrentPage(page);
   };
+
+  if (!ready) {
+    return (
+      <div className="bg-white text-slate-900">
+        <PageContainer className="py-8">
+          <p className="text-sm text-slate-500">거래 목록을 불러오는 중…</p>
+        </PageContainer>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white text-slate-900">

@@ -1,20 +1,37 @@
-import {
-  DOWN_PAYMENT_RATIO,
-  maskBankAccount,
-} from '@/features/documents/quote/supplier/constants';
+import { maskBankAccount } from '@/features/documents/quote/supplier/constants';
 import { formatKRW } from '@/lib/documents/format';
-import type { QuoteDocument, Totals } from '@/types/documents/document';
+import {
+  DEFAULT_DOWN_PAYMENT_PERCENT,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
+import type { QuoteDocument } from '@/types/documents/document';
 
-export function calcPoPaymentAmounts(totals: Totals) {
-  const downPayment = Math.round(totals.subtotal * DOWN_PAYMENT_RATIO);
-  const balance = totals.total - downPayment;
+/**
+ * PO 단계의 선금/잔금 금액 산출.
+ * - 백엔드가 actualDepositAmount/actualBalanceAmount를 내려주면 실 금액 우선
+ * - 미결제 단계는 quote.downPaymentPercent / paymentTerms로 계산 fallback
+ * - 백엔드 결제 산출 기준과 일치시키기 위해 total(부가세 포함) 기준
+ */
+export function calcPoPaymentAmounts(quote: QuoteDocument) {
+  const percent = resolveDownPaymentPercent(quote);
+  const balancePercent = 100 - percent;
+  const calcDownPayment = Math.round(quote.totals.total * (percent / 100));
+  const calcBalance = quote.totals.total - calcDownPayment;
+  const downPayment =
+    typeof quote.actualDepositAmount === 'number' ? quote.actualDepositAmount : calcDownPayment;
+  const balance =
+    typeof quote.actualBalanceAmount === 'number' ? quote.actualBalanceAmount : calcBalance;
   return {
     downPayment,
     balance,
+    downPaymentPercent: percent,
+    balancePercent,
     downPaymentLabel: formatKRW(downPayment),
     balanceLabel: formatKRW(balance),
   };
 }
+
+export { DEFAULT_DOWN_PAYMENT_PERCENT };
 
 /** supplierProfile.bankAccount — "국민은행 · 123456-78-901234" */
 export function formatSupplierBankDisplay(quote: QuoteDocument) {

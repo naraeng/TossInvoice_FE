@@ -1,5 +1,6 @@
 import { Check, ChevronRight } from 'lucide-react';
 
+import { resolveDownPaymentPercent } from '@/lib/documents/payment-terms';
 import type { QuoteDocument } from '@/types/documents/document';
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 
 export function ClientQuotePoIssuedHeader({ quote }: Props) {
   const poNo = quote.poDocumentNo ?? 'PO-발행';
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
 
   return (
     <header className="space-y-4">
@@ -29,7 +31,7 @@ export function ClientQuotePoIssuedHeader({ quote }: Props) {
             )에 발주서가 전송되었어요
           </p>
           <p className="text-sm leading-relaxed text-slate-500">
-            수주처가 확인 후 서명하면 선금(30%)이 안전결제로 처리되고, 최종 invoice 발급 단계로
+            수주처가 확인 후 서명하면 선금({downPaymentPercent}%)이 안전결제로 처리되고, 최종 invoice 발급 단계로
             넘어가요
           </p>
         </div>

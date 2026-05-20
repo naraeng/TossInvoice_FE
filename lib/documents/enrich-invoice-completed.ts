@@ -11,9 +11,13 @@ export function enrichInvoiceCompleted(quote: QuoteDocument): QuoteDocument {
   const supplierSig = getInvoiceSupplierSignature(quote);
   const clientSig = getInvoiceClientSignature(quote);
   const supplierName =
-    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.supplier.companyName ??
+    '';
   const clientName =
-    quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+    quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.client.companyName ??
+    '';
 
   let signatures = quote.signatures;
 
@@ -23,7 +27,6 @@ export function enrichInvoiceCompleted(quote: QuoteDocument): QuoteDocument {
       scope: 'INVOICE',
       signedAt: quote.invoiceIssuedAt ?? now,
       signerName: supplierName,
-      ipAddress: '203.241.128.45',
     });
   }
 
@@ -33,7 +36,6 @@ export function enrichInvoiceCompleted(quote: QuoteDocument): QuoteDocument {
       scope: 'INVOICE',
       signedAt: now,
       signerName: clientName,
-      ipAddress: '203.241.99.12',
     });
   }
 

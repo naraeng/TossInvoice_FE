@@ -1,8 +1,9 @@
 'use client';
 
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
-import { type NoticeIcon } from '@/lib/notices';
+import { type NoticeIcon, noticeHref } from '@/lib/notices';
 import { useNotifications } from '@/lib/use-notifications';
 
 function NoticeIconBadge({ icon }: { icon: NoticeIcon }) {
@@ -28,6 +29,7 @@ function NoticeIconBadge({ icon }: { icon: NoticeIcon }) {
 }
 
 export default function NoticeList() {
+  const router = useRouter();
   const { notices, loading } = useNotifications();
   const preview = notices.slice(0, 3);
 
@@ -43,24 +45,46 @@ export default function NoticeList() {
         ) : preview.length === 0 ? (
           <li className="px-5 py-6 text-center text-sm text-slate-400">새 알림이 없습니다.</li>
         ) : (
-          preview.map((n) => (
-            <li
-              key={n.id}
-              className="flex items-start gap-3 px-5 py-4 transition hover:bg-slate-50"
-            >
-              <NoticeIconBadge icon={n.icon} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900">{n.title}</p>
-                <p className="mt-0.5 whitespace-normal break-words text-xs text-slate-400">{n.desc}</p>
-                {n.senderCompanyName && (
-                  <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                    {n.senderCompanyName}
-                  </p>
-                )}
-              </div>
-              <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-300">{n.time}</span>
-            </li>
-          ))
+          preview.map((n) => {
+            const href = noticeHref(n);
+            const clickable = href != null;
+            const onClick = () => {
+              if (href) router.push(href);
+            };
+            return (
+              <li
+                key={n.id}
+                onClick={clickable ? onClick : undefined}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={
+                  clickable
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onClick();
+                        }
+                      }
+                    : undefined
+                }
+                className={`flex items-start gap-3 px-5 py-4 transition ${
+                  clickable ? 'cursor-pointer hover:bg-slate-50' : 'cursor-default'
+                }`}
+              >
+                <NoticeIconBadge icon={n.icon} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{n.title}</p>
+                  <p className="mt-0.5 whitespace-normal break-words text-xs text-slate-400">{n.desc}</p>
+                  {n.senderCompanyName && (
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                      {n.senderCompanyName}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-300">{n.time}</span>
+              </li>
+            );
+          })
         )}
       </ul>
 

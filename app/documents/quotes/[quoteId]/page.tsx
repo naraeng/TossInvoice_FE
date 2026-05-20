@@ -1,20 +1,18 @@
-import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { QuoteDetailPageClient } from '@/features/documents/quote/QuoteDetailPageClient';
-import { getQuoteById } from '@/lib/documents/quote-store';
 
 type PageProps = {
   params: Promise<{ quoteId: string }>;
 };
 
+/**
+ * 서버는 더 이상 globalThis quote-store를 조회하지 않음.
+ * 실데이터는 클라이언트에서 `trade-{tradeId}` 패턴 파싱 후 백엔드 detail로 빌드.
+ * 레거시 `quote-{ts}` URL은 클라이언트 in-memory 캐시에서만 시도.
+ */
 export default async function QuoteDetailPage({ params }: PageProps) {
   const { quoteId } = await params;
-  const quote = getQuoteById(quoteId);
-
-  if (!quote) {
-    notFound();
-  }
 
   return (
     <Suspense
@@ -24,7 +22,7 @@ export default async function QuoteDetailPage({ params }: PageProps) {
         </div>
       }
     >
-      <QuoteDetailPageClient quote={quote} />
+      <QuoteDetailPageClient quoteId={quoteId} />
     </Suspense>
   );
 }

@@ -2,6 +2,7 @@ import axios from 'axios';
 import {
   clearAuthTokens,
   getAccessToken,
+  getRefreshToken,
   isRememberLoginEnabled,
   storeAuthTokens,
 } from '@/lib/auth-storage';
@@ -17,10 +18,30 @@ let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
 
 async function reissueAccessToken(): Promise<string | null> {
+  // 백엔드 @NotBlank — refreshToken을 본문에 실어야 함. 저장된 게 없으면 시도 불가
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearAuthTokens();
+    if (typeof window !== 'undefined') {
+      try {
+        // /login 진입 시 만료 메시지를 노출하도록 reason 기록
+        try {
+          sessionStorage.setItem('auth-redirect-reason', 'session-expired');
+        } catch {
+          /* ignore storage failure */
+        }
+        window.location.href = '/login';
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  }
+
   try {
     const res = await axios.post(
       '/api/v1/auth/reissue',
-      {},
+      { refreshToken },
       {
         baseURL: resolveApiBaseUrl(),
         headers: { 'Content-Type': 'application/json' },
@@ -28,12 +49,14 @@ async function reissueAccessToken(): Promise<string | null> {
       },
     );
     const result = res.data?.result as
-      | { accessToken?: string }
+      | { accessToken?: string; refreshToken?: string }
       | undefined;
     if (!result?.accessToken) return null;
 
+    // RTR(Rotating Refresh Token): 응답에 새 refreshToken이 오면 함께 저장
     storeAuthTokens({
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       rememberLogin: isRememberLoginEnabled(),
     });
     return result.accessToken;
@@ -41,6 +64,12 @@ async function reissueAccessToken(): Promise<string | null> {
     clearAuthTokens();
     if (typeof window !== 'undefined') {
       try {
+        // /login 진입 시 만료 메시지를 노출하도록 reason 기록
+        try {
+          sessionStorage.setItem('auth-redirect-reason', 'session-expired');
+        } catch {
+          /* ignore storage failure */
+        }
         window.location.href = '/login';
       } catch {
         // ignore
@@ -84,21 +113,6 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   config.withCredentials = true;
-
-  // multipart/form-data: browser must set Content-Type with boundary (not application/json)
-  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-    const headers = config.headers;
-    if (headers && typeof headers === 'object') {
-      if ('delete' in headers && typeof headers.delete === 'function') {
-        headers.delete('Content-Type');
-        headers.delete('content-type');
-      } else {
-        const record = headers as Record<string, unknown>;
-        delete record['Content-Type'];
-        delete record['content-type'];
-      }
-    }
-  }
 
   return config;
 });
