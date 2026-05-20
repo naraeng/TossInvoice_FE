@@ -10,6 +10,7 @@ import MyPageTopSection from '@/features/mypage/MyPageTopSection';
 import { getDisplayProfile, saveMemberProfile, type MemberProfile } from '@/lib/auth-user';
 import { apiClient } from '@/lib/api';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
+import { useAuthGuard } from '@/lib/auth-guard';
 
 type MyInfoApiResult = {
   email?: string;
@@ -22,6 +23,9 @@ type MyInfoApiResult = {
   address?: string;
   bank?: string;
   account?: string;
+  // 백엔드 MyPageResponse 의 GCS public URL
+  businessRegistrationUrl?: string;
+  bankbookUrl?: string;
 };
 
 type MyInfoApiResponse = {
@@ -54,14 +58,19 @@ function normalizeMyInfoToProfile(data: MyInfoApiResult): Partial<MemberProfile>
     address: data.address ?? '',
     bank: data.bank ?? '',
     account: data.account ?? '',
+    // 첨부 서류 URL 도 함께 보존
+    businessRegistrationUrl: data.businessRegistrationUrl?.trim() || undefined,
+    bankbookUrl: data.bankbookUrl?.trim() || undefined,
   };
 }
 
 export default function MyPage() {
   const router = useRouter();
+  const { ready } = useAuthGuard();
   const [profile, setProfile] = useState<MemberProfile>(EMPTY_PROFILE);
 
   useEffect(() => {
+    if (!ready) return;
     let cancelled = false;
 
     // Hydration-safe: read local profile only after mount.
@@ -86,7 +95,17 @@ export default function MyPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ready]);
+
+  if (!ready) {
+    return (
+      <div className="bg-white text-slate-900">
+        <PageContainer className="py-8">
+          <p className="text-sm text-slate-500">마이페이지를 불러오는 중…</p>
+        </PageContainer>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white text-slate-900">

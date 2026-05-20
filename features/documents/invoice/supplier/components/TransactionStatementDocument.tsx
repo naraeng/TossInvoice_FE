@@ -3,6 +3,10 @@ import {
   DEFAULT_SUPPLIER_PROFILE,
 } from '@/lib/documents/enrich-issued-quote';
 import { formatKRW } from '@/lib/documents/format';
+import {
+  buildPaymentMethodLabel,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
 import type { ReactNode } from 'react';
 
 import type { CompanyProfile } from '@/types/documents/company';
@@ -67,7 +71,7 @@ export function TransactionStatementDocument({ quote, trackingNumber, children }
   const issuedAt = quote.invoiceIssuedAt ?? new Date().toISOString();
   const paymentMethod =
     quote.transactionTerms?.paymentMethod ??
-    '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)';
+    buildPaymentMethodLabel(resolveDownPaymentPercent(quote));
 
   const metaCells = [
     { label: 'invoice 번호', value: invNo },
@@ -199,10 +203,16 @@ export function TransactionStatementDocument({ quote, trackingNumber, children }
           </div>
           {quote.transactionTerms?.deliverySchedule && (
             <div className="flex gap-4">
-              <dt className="w-20 shrink-0 text-[#8E8E8E]">납품 확정일</dt>
+              <dt className="w-20 shrink-0 text-[#8E8E8E]">납품 일정</dt>
               <dd className="font-semibold text-emerald-600">
                 {quote.transactionTerms.deliverySchedule}
               </dd>
+            </div>
+          )}
+          {quote.shippingAddress && (
+            <div className="flex gap-4">
+              <dt className="w-20 shrink-0 text-[#8E8E8E]">배송 주소</dt>
+              <dd className="leading-relaxed">{quote.shippingAddress}</dd>
             </div>
           )}
         </dl>

@@ -1,22 +1,31 @@
+import {
+  buildPaymentMethodLabel,
+  formatPaymentTerms,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
 import { formatDeliveryScheduleSummary, resolveQuoteSchedule } from '@/lib/documents/schedule';
 import type { CompanyProfile } from '@/types/documents/company';
 import type { QuoteDocument } from '@/types/documents/document';
 
+/**
+ * 미입력 필드를 화면 렌더링이 깨지지 않게 비워둔 placeholder.
+ * 실데이터는 백엔드 /users/me · /trades/{id} 응답으로 채움.
+ */
 export const DEFAULT_SUPPLIER_PROFILE: CompanyProfile = {
-  businessNo: '123-45-67890',
-  representative: '박장규',
-  address: '서울시 강남구 테헤란로 123, 4층',
-  contact: '02-1234-5678 · pi@jangfood.co.kr',
-  bankAccount: '국민은행 · 123456-78-901234',
-  verified: true,
+  businessNo: '',
+  representative: '',
+  address: '',
+  contact: '',
+  bankAccount: undefined,
+  verified: false,
 };
 
 export const DEFAULT_CLIENT_PROFILE: CompanyProfile = {
-  businessNo: '987-65-43210',
-  representative: '김민수',
-  address: '서울시 마포구 연남동 45-12',
-  contact: '010-9876-5432 · order@nalae.coffee',
-  verified: true,
+  businessNo: '',
+  representative: '',
+  address: '',
+  contact: '',
+  verified: false,
 };
 
 function buildDocumentNo(issuedAt: string, existing?: string) {
@@ -30,9 +39,8 @@ export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
   const issuedAt = quote.issuedAt || new Date().toISOString().slice(0, 10);
   const schedule = resolveQuoteSchedule(quote);
   const deliverySummary = formatDeliveryScheduleSummary(schedule);
-  const hasSupplierSig = quote.signatures.some(
-    (s) => s.party === 'SUPPLIER' && (s.scope === 'PI' || !s.scope)
-  );
+  // 선금 비율 기반으로 paymentTerms/paymentMethod 일관되게 재구성
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
 
   return {
     ...quote,
@@ -42,31 +50,22 @@ export function enrichIssuedQuote(quote: QuoteDocument): QuoteDocument {
     validityUntil: quote.validityUntil,
     productionDays: quote.productionDays,
     paymentDueDays: quote.paymentDueDays,
-    paymentTerms: quote.paymentTerms ?? '선금 30% / 잔금 70%',
+    downPaymentPercent,
+    paymentTerms: quote.paymentTerms ?? formatPaymentTerms(downPaymentPercent),
     bankVerified: quote.bankVerified ?? true,
-    supplierProfile: quote.supplierProfile ?? DEFAULT_SUPPLIER_PROFILE,
-    clientProfile: quote.clientProfile ?? DEFAULT_CLIENT_PROFILE,
+    // 실데이터 우선, 없으면 그대로 undefined
+    supplierProfile: quote.supplierProfile,
+    clientProfile: quote.clientProfile,
     transactionTerms: {
       paymentMethod:
-        quote.transactionTerms?.paymentMethod ??
-        '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
+        quote.transactionTerms?.paymentMethod ?? buildPaymentMethodLabel(downPaymentPercent),
       deliverySchedule:
         quote.transactionTerms?.deliverySchedule ??
         deliverySummary ??
         '발주처와 일정 합의 후 반영',
     },
-    signatures: hasSupplierSig
-      ? quote.signatures
-      : [
-          ...quote.signatures,
-          {
-            party: 'SUPPLIER',
-            scope: 'PI',
-            signedAt: new Date().toISOString(),
-            signerName:
-              quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규',
-            ipAddress: '203.241.128.45',
-          },
-        ],
+    // 가짜 서명 자동 삽입 제거. 백엔드 trade detail의 sellerSignatureUrl/buyerSignatureUrl이 source of truth.
+    // map-trade-to-quote.ts에서 백엔드 응답을 신뢰해 signatures를 채우므로 여기서는 사용자가 실제 그린 서명만 보존한다.
+    signatures: quote.signatures,
   };
 }

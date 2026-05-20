@@ -9,7 +9,7 @@ type Props = {
 
 export function ClientQuotePoConfirmedHeader({ quote }: Props) {
   const poNo = quote.poDocumentNo ?? 'PO-발행';
-  const { downPaymentLabel } = calcPoPaymentAmounts(quote.totals);
+  const { downPaymentLabel } = calcPoPaymentAmounts(quote);
 
   return (
     <header className="space-y-4">

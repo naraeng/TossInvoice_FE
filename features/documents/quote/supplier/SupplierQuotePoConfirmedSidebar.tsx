@@ -21,7 +21,7 @@ export function SupplierQuotePoConfirmedSidebar({
   onCreateInvoice,
   onDownloadPdf,
 }: Props) {
-  const { downPaymentLabel } = calcPoPaymentAmounts(quote.totals);
+  const { downPaymentLabel } = calcPoPaymentAmounts(quote);
 
   return (
     <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.25)]">

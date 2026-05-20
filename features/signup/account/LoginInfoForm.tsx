@@ -10,6 +10,26 @@ import { useSignupDocumentFiles } from '@/features/signup/SignupDocumentFilesPro
 import { storeAuthTokens } from '@/lib/auth-storage';
 import { saveMemberProfile } from '@/lib/auth-user';
 import { apiClient } from '@/lib/api';
+import { resolveErrorMessageFromError } from '@/lib/error-messages';
+
+const REMEMBER_KEY = 'ti-login-remember';
+
+/**
+ * 로그인 화면의 "로그인 상태 유지" 체크박스 마지막 선택값을 그대로 사용.
+ * 회원가입 직후 자동 로그인이 사용자가 명시적으로 선택한 흐름이 아니기 때문에,
+ * 기본값(localStorage)을 강제하지 않고 마지막 사용자 선택을 따른다.
+ */
+function readRememberPreference(): boolean {
+  try {
+    const stored = localStorage.getItem(REMEMBER_KEY);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+  } catch {
+    /* ignore */
+  }
+  // 처음 가입한 사용자는 아직 로그인 화면을 본 적 없으므로 안전한 기본값: 미유지(=sessionStorage)
+  return false;
+}
 
 function isValidEmail(s: string): boolean {
   const t = s.trim();
@@ -30,11 +50,17 @@ function isValidPassword(s: string): boolean {
   return hasLetter && hasDigit && hasSpecial;
 }
 
-function normalizeCompanyType(value: unknown): 'CORPORATE' | 'INDIVIDUAL' {
+/**
+ * OCR 추출 companyType을 백엔드가 받는 두 가지 enum 값으로 normalize.
+ * - 'CORPORATE' / 'INDIVIDUAL' 은 그대로 사용
+ * - 'PERSONAL' 은 별칭으로만 인정해 'INDIVIDUAL' 로 매핑(과거 OCR 결과 호환)
+ * - 그 외(빈 값/null/기타 문자열)는 판단 불가 → null 반환해 사용자 선택을 강제
+ */
+function normalizeCompanyType(value: unknown): 'CORPORATE' | 'INDIVIDUAL' | null {
   if (value === 'CORPORATE') return 'CORPORATE';
-  // Backward compatibility: older OCR state used PERSONAL.
+  if (value === 'INDIVIDUAL') return 'INDIVIDUAL';
   if (value === 'PERSONAL') return 'INDIVIDUAL';
-  return 'INDIVIDUAL';
+  return null;
 }
 
 /** Spring @RequestPart MIME 검증용 — 브라우저가 type을 비워 둔 경우 보정 */
@@ -114,6 +140,22 @@ export default function LoginInfoForm({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // OCR로 companyType이 결정되지 않은 경우 사용자가 직접 선택. null이면 미선택 상태.
+  const ocrCompanyType = normalizeCompanyType(
+    (ocrExtracted as { companyType?: unknown } | null)?.companyType,
+  );
+  const [manualCompanyType, setManualCompanyType] = useState<'CORPORATE' | 'INDIVIDUAL' | null>(
+    null,
+  );
+  const effectiveCompanyType = ocrCompanyType ?? manualCompanyType;
+  const needsManualCompanyType = ocrCompanyType === null;
+
+  // OCR이 사업장 주소를 추출하지 못한 경우 사용자가 직접 입력하도록 폴백 input 노출.
+  const ocrAddress = (ocrExtracted?.address ?? '').trim();
+  const needsManualAddress = !ocrAddress;
+  const [manualAddress, setManualAddress] = useState('');
+  const effectiveAddress = ocrAddress || manualAddress.trim();
+  const addressOk = effectiveAddress.length > 0;
 
   const emailOk = isValidEmail(email);
   const phoneOk = isValidKrPhone(phone);
@@ -132,6 +174,8 @@ export default function LoginInfoForm({
     phoneOk &&
     passwordOk &&
     confirmOk &&
+    effectiveCompanyType !== null &&
+    addressOk &&
     !isSubmitting;
 
   useEffect(() => {
@@ -163,9 +207,18 @@ export default function LoginInfoForm({
         return;
       }
 
-      const companyType = normalizeCompanyType(
-        (ocrExtracted as { companyType?: unknown } | null)?.companyType,
-      );
+      // OCR이 결정해줬으면 그 값, 아니면 사용자가 선택한 값. 둘 다 없으면 차단.
+      const companyType = effectiveCompanyType;
+      if (!companyType) {
+        setSubmitError('과세 유형(법인/개인사업자)을 선택해 주세요.');
+        return;
+      }
+
+      // OCR이 주소를 비워 보내면 백엔드 REQUEST_001 — 수동 입력 강제
+      if (!effectiveAddress) {
+        setSubmitError('사업장 주소를 입력해 주세요.');
+        return;
+      }
 
       const signupPayload = {
         companyName: ocrExtracted.companyName,
@@ -176,7 +229,7 @@ export default function LoginInfoForm({
         account: ocrExtracted.account,
         email: email.trim(),
         password,
-        address: ocrExtracted.address,
+        address: effectiveAddress,
         phone,
         companyType,
       };
@@ -200,14 +253,21 @@ export default function LoginInfoForm({
             password,
           });
           const loginData = loginRes.data as {
-            result?: { accessToken?: string };
+            result?: { accessToken?: string; refreshToken?: string };
           };
           const accessToken = loginData?.result?.accessToken;
+          const refreshToken = loginData?.result?.refreshToken;
           if (accessToken) {
+            // 가입 직후 자동 로그인 — 사용자가 명시적으로 선택한 흐름이 아니므로 강제 true 대신
+            // 로그인 화면의 마지막 "로그인 상태 유지" 선택값(localStorage)에 위임.
+            const rememberLogin = readRememberPreference();
+            // refreshToken까지 보관해야 토큰 만료 후 갱신 가능
             storeAuthTokens({
               accessToken,
-              rememberLogin: true,
+              refreshToken,
+              rememberLogin,
             });
+            // accountHolder는 백엔드에 저장되지 않는 OCR 검증용 필드이므로 영속 프로필에는 보관하지 않는다.
             saveMemberProfile(
               {
                 email: email.trim(),
@@ -216,13 +276,12 @@ export default function LoginInfoForm({
                 businessNumber: ocrExtracted.businessNumber,
                 ceoName: ocrExtracted.ceoName,
                 companyType: companyType === 'CORPORATE' ? '법인' : '개인',
-                address: ocrExtracted.address,
+                address: effectiveAddress,
                 bank: ocrExtracted.bank,
                 account: ocrExtracted.account,
-                accountHolder: ocrExtracted.accountHolder,
                 businessType: ocrExtracted.businessType,
               },
-              true,
+              rememberLogin,
             );
           }
         } catch {
@@ -240,31 +299,7 @@ export default function LoginInfoForm({
         return;
       }
     } catch (error: unknown) {
-      if (typeof error === 'object' && error && 'response' in error) {
-        const response = (
-          error as {
-            response?: {
-              data?: { errorCode?: string; message?: string };
-            };
-          }
-        ).response;
-        const code = response?.data?.errorCode;
-        if (code === 'AUTH_001') {
-          setSubmitError('이미 사용 중인 이메일입니다.');
-        } else if (code === 'AUTH_002') {
-          setSubmitError('이미 등록된 사업자번호입니다.');
-        } else if (code === 'REQUEST_001') {
-          setSubmitError(response?.data?.message ?? '요청 형식이 올바르지 않습니다.');
-        } else if (code === 'STORAGE_001') {
-          setSubmitError('업로드 파일이 비어 있습니다. 서류를 다시 업로드해 주세요.');
-        } else if (code === 'STORAGE_002') {
-          setSubmitError('지원하지 않는 파일 형식입니다. 사업자등록증은 PDF, 통장사본은 JPG/PNG만 가능합니다.');
-        } else {
-          setSubmitError(response?.data?.message ?? '회원가입 처리 중 오류가 발생했습니다.');
-        }
-      } else {
-        setSubmitError('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-      }
+      setSubmitError(resolveErrorMessageFromError(error, '회원가입 처리 중 오류가 발생했습니다.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -346,6 +381,56 @@ export default function LoginInfoForm({
           </div>
         </label>
       </div>
+      {needsManualAddress ? (
+        <div className="space-y-1.5">
+          <span className="text-sm font-semibold text-slate-800">사업장 주소</span>
+          <p className="text-xs text-slate-400">
+            서류에서 자동으로 인식하지 못했어요. 직접 입력해 주세요.
+          </p>
+          <Input
+            type="text"
+            value={manualAddress}
+            onChange={(e) => setManualAddress(e.target.value)}
+            placeholder="예: 서울특별시 중구 세종대로 110"
+            aria-invalid={!addressOk}
+            className={cn('h-11 rounded-xl', !addressOk && manualAddress.length > 0 && 'border-red-300')}
+          />
+        </div>
+      ) : null}
+      {needsManualCompanyType ? (
+        <div className="space-y-1.5">
+          <span className="text-sm font-semibold text-slate-800">과세 유형</span>
+          <p className="text-xs text-slate-400">
+            서류에서 자동으로 판별하지 못했어요. 직접 선택해 주세요.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setManualCompanyType('CORPORATE')}
+              className={cn(
+                'h-11 flex-1 rounded-xl border text-sm font-semibold transition',
+                manualCompanyType === 'CORPORATE'
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              법인사업자
+            </button>
+            <button
+              type="button"
+              onClick={() => setManualCompanyType('INDIVIDUAL')}
+              className={cn(
+                'h-11 flex-1 rounded-xl border text-sm font-semibold transition',
+                manualCompanyType === 'INDIVIDUAL'
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              개인사업자
+            </button>
+          </div>
+        </div>
+      ) : null}
       {submitError ? <p className="text-sm font-semibold text-red-600">{submitError}</p> : null}
       {!requiredTermsAgreed ? (
         <p className="text-xs text-slate-400">필수 약관 동의 후 가입 버튼이 활성화됩니다.</p>

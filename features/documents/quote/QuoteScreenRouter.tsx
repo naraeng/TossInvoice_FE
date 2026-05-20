@@ -67,6 +67,7 @@ export function QuoteScreenRouter({
       onDownPaymentPercentChange={onDownPaymentPercentChange}
       onScheduleChange={onScheduleChange}
       onSignatureChange={onSignatureChange}
+      onDeliveryDateChange={onDeliveryDateChange}
     />
   );
 }

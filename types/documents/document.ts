@@ -66,6 +66,9 @@ export interface QuoteDocument {
   tradeId?: number;
   /** 거래보기(GET /trades/{id}) 시 탭 역할로 확정한 화면 역할 */
   viewerRoleHint?: UserRole;
+  /** 거래 상대방 신고 등 API 호출 시 필요한 백엔드 userId — trade detail 응답에서 보존 */
+  sellerUserId?: number;
+  buyerUserId?: number;
   documentNo: string;
   status: QuoteStatus;
   issuedAt: string;
@@ -87,6 +90,8 @@ export interface QuoteDocument {
   transactionTerms?: TransactionTerms;
   note?: string;
   bankVerified?: boolean;
+  /** 발주처(거래처) 위험도 — 회사 검증 API의 status 원본('정상'/'주의'/'위험') */
+  clientStatus?: '정상' | '주의' | '위험';
   /** PI 견적번호 (PO 작성 시 참조) */
   piDocumentNo?: string;
   /** 발주서 번호 */
@@ -117,6 +122,22 @@ export interface QuoteDocument {
   depositPaidAt?: string;
   /** 잔금 송금 완료 시각 */
   balancePaidAt?: string;
+  /** PO 확정 후 백엔드가 내려준 실제 선금 입금액 (없으면 클라 계산) */
+  actualDepositAmount?: number;
+  /** Invoice 완료 후 백엔드가 내려준 실제 잔금 송금액 (없으면 클라 계산) */
+  actualBalanceAmount?: number;
+  /** 발주처 희망 납품일 (PO 발행 시 입력) */
+  desiredDeliveryDate?: string;
+  /** 수주처 확정 납품일 (PO 카운터서명 시 확정) */
+  confirmedDeliveryDate?: string;
+  /** PI 발행 datetime (HH:mm 포함, 백엔드 yyyy-MM-dd HH:mm:ss → ISO) */
+  proformaInvoiceDatetime?: string;
+  /** PO 발행 datetime (HH:mm 포함, 백엔드 yyyy-MM-dd HH:mm:ss → ISO) */
+  purchaseOrderDatetime?: string;
+  /** Invoice 발행 datetime (HH:mm 포함, 백엔드 yyyy-MM-dd HH:mm:ss → ISO) */
+  invoiceDatetime?: string;
+  /** Invoice 단계 수주처 계좌 스냅샷 (없으면 PO 스냅샷 fallback) */
+  invoiceSellerAccount?: string;
 }
 
 export interface QuoteScreenProps {

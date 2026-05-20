@@ -19,6 +19,16 @@ export function formatPaymentTerms(downPaymentPercent: number) {
   return `선금 ${down}% / 잔금 ${balance}%`;
 }
 
+/**
+ * "안전결제 (선금 N% PO 합의 시 / 잔금 M% 납품 확인 시)" — 거래 조건 결제 방식 라벨.
+ * paymentMethod 하드코딩 fallback 일원화용.
+ */
+export function buildPaymentMethodLabel(downPaymentPercent: number) {
+  const down = clampDownPaymentPercent(downPaymentPercent);
+  const balance = 100 - down;
+  return `안전결제 (선금 ${down}% PO 합의 시 / 잔금 ${balance}% 납품 확인 시)`;
+}
+
 export function resolveDownPaymentPercent(input: {
   downPaymentPercent?: number;
   paymentTerms?: string;

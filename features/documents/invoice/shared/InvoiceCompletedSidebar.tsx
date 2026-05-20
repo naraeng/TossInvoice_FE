@@ -26,7 +26,7 @@ export function InvoiceCompletedSidebar({
   onBackToTrade,
 }: Props) {
   const invNo = quote.invoiceDocumentNo ?? 'Invoice';
-  const { balanceLabel } = calcPoPaymentAmounts(quote.totals);
+  const { balanceLabel } = calcPoPaymentAmounts(quote);
   const completedAt = quote.balancePaidAt
     ? new Date(quote.balancePaidAt).toLocaleString('ko-KR', {
         year: 'numeric',

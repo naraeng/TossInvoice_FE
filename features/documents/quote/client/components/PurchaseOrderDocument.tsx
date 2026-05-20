@@ -3,6 +3,11 @@ import {
   DEFAULT_SUPPLIER_PROFILE,
 } from '@/lib/documents/enrich-issued-quote';
 import { formatKRW } from '@/lib/documents/format';
+import {
+  buildPaymentMethodLabel,
+  formatPaymentTerms,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
 import type { ReactNode } from 'react';
 
 import type { CompanyProfile } from '@/types/documents/company';
@@ -71,10 +76,10 @@ export function PurchaseOrderDocument({ quote, variant = 'draft', children }: Pr
   const poDateRaw = quote.poIssuedAt ?? quote.issuedAt;
   const poDate = variant === 'issued' ? formatPoIssuedAt(poDateRaw) : poDateRaw.replace(/-/g, '.');
   const isIssued = variant === 'issued';
-  const paymentTerms = quote.paymentTerms ?? '선금 30% / 잔금 70%';
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
+  const paymentTerms = quote.paymentTerms ?? formatPaymentTerms(downPaymentPercent);
   const paymentMethod =
-    quote.transactionTerms?.paymentMethod ??
-    '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)';
+    quote.transactionTerms?.paymentMethod ?? buildPaymentMethodLabel(downPaymentPercent);
 
   const metaCells = [
     { label: '발주번호', value: poNo },
@@ -199,10 +204,16 @@ export function PurchaseOrderDocument({ quote, variant = 'draft', children }: Pr
           )}
           {isIssued && quote.transactionTerms?.deliverySchedule && (
             <div className="flex gap-4">
-              <dt className="w-20 shrink-0 text-[#8E8E8E]">납품 확정일</dt>
+              <dt className="w-20 shrink-0 text-[#8E8E8E]">납품 일정</dt>
               <dd className="font-semibold text-emerald-600">
                 {quote.transactionTerms.deliverySchedule}
               </dd>
+            </div>
+          )}
+          {isIssued && quote.shippingAddress && (
+            <div className="flex gap-4">
+              <dt className="w-20 shrink-0 text-[#8E8E8E]">배송 주소</dt>
+              <dd className="leading-relaxed">{quote.shippingAddress}</dd>
             </div>
           )}
         </dl>

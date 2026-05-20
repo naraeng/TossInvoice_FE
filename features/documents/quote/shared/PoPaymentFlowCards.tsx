@@ -9,7 +9,8 @@ type Props = {
 };
 
 export function PoPaymentFlowCards({ quote, variant = 'client' }: Props) {
-  const { downPaymentLabel, balanceLabel } = calcPoPaymentAmounts(quote.totals);
+  const { downPaymentLabel, balanceLabel, downPaymentPercent, balancePercent } =
+    calcPoPaymentAmounts(quote);
   const downPaymentHint =
     variant === 'supplier-confirmed'
       ? '보호 계좌 입금 완료'
@@ -34,7 +35,7 @@ export function PoPaymentFlowCards({ quote, variant = 'client' }: Props) {
               variant === 'supplier-confirmed' ? 'size-4 text-emerald-600' : 'size-4 text-amber-600'
             }
           />
-          <p className="text-xs font-bold text-slate-800">선금 (30%)</p>
+          <p className="text-xs font-bold text-slate-800">선금 ({downPaymentPercent}%)</p>
           <p className="ml-2 text-lg font-bold text-slate-900">{downPaymentLabel}</p>
         </div>
         <p className="text-[10px] leading-relaxed text-slate-500">{downPaymentHint}</p>
@@ -42,7 +43,7 @@ export function PoPaymentFlowCards({ quote, variant = 'client' }: Props) {
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
         <div className="flex items-center gap-2">
           <Vault className="size-4 text-slate-500" />
-          <p className="text-xs font-bold text-slate-800">잔금 (70%)</p>
+          <p className="text-xs font-bold text-slate-800">잔금 ({balancePercent}%)</p>
           <p className="ml-2 text-lg font-bold text-slate-900">{balanceLabel}</p>
         </div>
         <p className="text-[10px] leading-relaxed text-slate-500">

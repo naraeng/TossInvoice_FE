@@ -240,7 +240,7 @@ export default function TradeBoard({
             })}
           </div>
 
-          {activeRole === 'SELLER' && (
+          {activeRole === 'SELLER' && activePhase === 'ACTIVE' && (
             <Button
               type="button"
               disabled={loading || startingTrade}

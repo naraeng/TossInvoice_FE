@@ -26,7 +26,9 @@ export function PoIssuedSignatures({
   const poSupplierSig = getPoSupplierSignature(quote);
   const clientSig = getPoClientSignature(quote);
   const supplierRep =
-    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.supplier.companyName ??
+    '';
   const isSupplierView = viewerRole === 'SUPPLIER';
   const supplierPending = !poSupplierSig;
 

@@ -21,6 +21,8 @@ type Props = {
   onDownPaymentPercentChange?: (percent: number) => void;
   onScheduleChange?: (patch: Partial<QuoteSchedule>) => void;
   onSignatureChange?: (signed: boolean, imageDataUrl?: string) => void;
+  /** PO_ISSUED 단계에서 수주처가 confirmedDeliveryDate를 정할 때 사용. */
+  onDeliveryDateChange?: (value: string) => void;
 };
 
 export function SupplierQuoteScreen({
@@ -33,13 +35,20 @@ export function SupplierQuoteScreen({
   onDownPaymentPercentChange,
   onScheduleChange,
   onSignatureChange,
+  onDeliveryDateChange,
 }: Props) {
   if (quote.status === 'ISSUED') {
     return <SupplierQuoteIssuedScreen quote={quote} />;
   }
 
   if (quote.status === 'PO_ISSUED') {
-    return <SupplierQuotePoIssuedScreen quote={quote} onSignatureChange={onSignatureChange} />;
+    return (
+      <SupplierQuotePoIssuedScreen
+        quote={quote}
+        onSignatureChange={onSignatureChange}
+        onDeliveryDateChange={onDeliveryDateChange}
+      />
+    );
   }
 
   if (quote.status === 'PO_CONFIRMED') {

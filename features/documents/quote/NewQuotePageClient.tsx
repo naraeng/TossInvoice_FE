@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { createDraftQuoteViaApi } from '@/lib/documents/create-draft-quote-client';
+import { useAuthGuard } from '@/lib/auth-guard';
 
 export function NewQuotePageClient() {
   const router = useRouter();
+  const { ready } = useAuthGuard();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!ready) return;
     let cancelled = false;
 
     void (async () => {
@@ -31,7 +34,7 @@ export function NewQuotePageClient() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [ready, router]);
 
   if (error) {
     return (

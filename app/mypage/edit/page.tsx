@@ -7,6 +7,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { apiClient } from '@/lib/api';
 import { getDisplayProfile, saveMemberProfile, type MemberProfile } from '@/lib/auth-user';
 import { isRememberLoginEnabled } from '@/lib/auth-storage';
+import { useAuthGuard } from '@/lib/auth-guard';
 import DocumentUploadSection, {
   type OcrExtractedData,
   type OcrGateStatus,
@@ -27,7 +28,7 @@ type MyInfoApiResult = {
   address?: string;
   bank?: string;
   account?: string;
-  accountHolder?: string;
+  // accountHolder는 백엔드 MyPageResponse에 없는 필드. 클라이언트 OCR 검증용으로만 사용.
   businessRegistrationUrl?: string;
   bankbookUrl?: string;
   businessRegistrationFileUrl?: string;
@@ -91,6 +92,7 @@ function normalizeMyInfoToProfile(data: MyInfoApiResult): Partial<MemberProfile>
 
 export default function MyPageEditPage() {
   const router = useRouter();
+  const { ready } = useAuthGuard();
   const [profile, setProfile] = useState<MemberProfile>(EMPTY_PROFILE);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -105,6 +107,7 @@ export default function MyPageEditPage() {
   const [bankbookFile, setBankbookFile] = useState<File | null>(null);
 
   useEffect(() => {
+    if (!ready) return;
     let cancelled = false;
     const localProfile = getDisplayProfile();
     setProfile((prev) => ({ ...prev, ...localProfile }));
@@ -118,10 +121,10 @@ export default function MyPageEditPage() {
         const urls = pickDocumentUrls(result);
         saveMemberProfile(normalized, isRememberLoginEnabled());
         if (!cancelled) {
+          // accountHolder는 백엔드에 저장되지 않으므로 OCR 결과만으로 클라이언트가 채운다(이 시점엔 prev 유지).
           setProfile((prev) => ({
             ...prev,
             ...normalized,
-            accountHolder: result.accountHolder ?? prev.accountHolder,
           }));
           setBusinessRegistrationUrl(urls.businessRegistrationUrl);
           setBankbookUrl(urls.bankbookUrl);
@@ -134,7 +137,7 @@ export default function MyPageEditPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ready]);
 
   const passwordValid = useMemo(() => password.length >= 8 && password.length <= 100, [password]);
   const passwordMatched = useMemo(
@@ -266,13 +269,8 @@ export default function MyPageEditPage() {
       if (meResult) {
         const fromApi = normalizeMyInfoToProfile(meResult);
         const urls = pickDocumentUrls(meResult);
-        saveMemberProfile(
-          {
-            ...fromApi,
-            accountHolder: meResult.accountHolder ?? profile.accountHolder,
-          },
-          isRememberLoginEnabled(),
-        );
+        // accountHolder는 서버 응답에 없으므로 저장하지 않는다(클라이언트 OCR 검증용으로만 유지).
+        saveMemberProfile(fromApi, isRememberLoginEnabled());
         if (bankbookFile) {
           setBankbookUrl(urls.bankbookUrl);
         }
@@ -304,6 +302,16 @@ export default function MyPageEditPage() {
       setIsSaving(false);
     }
   };
+
+  if (!ready) {
+    return (
+      <div className="bg-white text-slate-900">
+        <PageContainer className="py-8">
+          <p className="text-sm text-slate-500">회원정보 수정 화면을 불러오는 중…</p>
+        </PageContainer>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white text-slate-900">

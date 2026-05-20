@@ -18,11 +18,16 @@ import { QuoteScreenRouter } from '@/features/documents/quote/QuoteScreenRouter'
 import { SupplierQuoteDraftSidebar } from '@/features/documents/quote/supplier/SupplierQuoteDraftSidebar';
 import { SupplierQuoteIssuedSidebar } from '@/features/documents/quote/supplier/SupplierQuoteIssuedSidebar';
 import type { ClientCompany } from '@/features/documents/quote/supplier/constants';
-import { enrichIssuedQuote } from '@/lib/documents/enrich-issued-quote';
 import { getScreenConfig } from '@/lib/documents/get-screen-config';
 import { saveQuote } from '@/lib/documents/quote-store';
+import { createReport } from '@/lib/reports/create-report';
 import { calcTotals } from '@/lib/documents/calc-totals';
-import { clampDownPaymentPercent, formatPaymentTerms } from '@/lib/documents/payment-terms';
+import {
+  buildPaymentMethodLabel,
+  clampDownPaymentPercent,
+  formatPaymentTerms,
+  resolveDownPaymentPercent,
+} from '@/lib/documents/payment-terms';
 import {
   minValidityUntilDate,
   normalizePaymentDueDays,
@@ -190,6 +195,12 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   };
 
   const handleClientChange = (client: ClientCompany) => {
+    // status 원본('정상'/'주의'/'위험')을 보존해서 PI 화면에서 위험도 배지 분기 가능하도록 저장
+    const normalizedStatus: QuoteDocument['clientStatus'] =
+      client.status === '정상' || client.status === '주의' || client.status === '위험'
+        ? client.status
+        : undefined;
+
     persist({
       ...quote,
       client: {
@@ -206,6 +217,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         verified: client.verified,
       },
       bankVerified: client.verified,
+      clientStatus: normalizedStatus,
     });
   };
 
@@ -216,6 +228,39 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     setLastSavedLabel(formatSavedLabel(now));
   };
 
+  /**
+   * 거래 상대방 신고 — POST /api/v1/report
+   * 신고자는 백엔드가 JWT에서 추출하고, 클라이언트는 tradeId + 상대방(reportedId)만 보내면 된다.
+   * 발주처(CLIENT) 입장이면 수주처(seller)를, 수주처(SUPPLIER) 입장이면 발주처(buyer)를 신고 대상으로 잡는다.
+   */
+  const handleReportIssue = useCallback(async () => {
+    const tradeId = quote.tradeId;
+    if (tradeId == null) {
+      alert('연결된 거래 정보가 없어 신고를 접수할 수 없습니다.');
+      return;
+    }
+    const reportedId =
+      viewerRole === 'CLIENT' ? quote.sellerUserId : quote.buyerUserId;
+    if (reportedId == null) {
+      alert('상대방 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    const confirmed = window.confirm(
+      '거래 상대방을 신고하시겠습니까?\n허위 신고 시 불이익이 발생할 수 있습니다.',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await createReport({ tradeId, reportedId });
+      alert('신고가 정상적으로 접수되었습니다. 관리자가 확인 후 조치합니다.');
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : '신고 접수 중 오류가 발생했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }, [quote.tradeId, quote.sellerUserId, quote.buyerUserId, viewerRole]);
+
   const handleDeliveryDateChange = (deliveryDate: string) => {
     persist({
       ...quote,
@@ -223,7 +268,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       transactionTerms: {
         paymentMethod:
           quote.transactionTerms?.paymentMethod ??
-          '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
+          buildPaymentMethodLabel(resolveDownPaymentPercent(quote)),
         deliverySchedule: deliveryDate
           ? `${deliveryDate.replace(/-/g, '.')} (발주처 확정)`
           : '발주처 납품일 확정 후 자동 반영',
@@ -239,7 +284,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     (signed: boolean, imageDataUrl?: string) => {
       setHasClientInvoiceSignature(signed);
       const signerName =
-        quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+        quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ??
+        quote.client.companyName ??
+        '';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -302,7 +349,10 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
   const handleClientPoSignature = useCallback(
     (signed: boolean, imageDataUrl?: string) => {
       setHasClientPoSignature(signed);
-      const signerName = quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ?? '김민수';
+      const signerName =
+        quote.clientProfile?.representative.replace(/\s*대표\s*$/, '') ??
+        quote.client.companyName ??
+        '';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -332,7 +382,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     (signed: boolean, imageDataUrl?: string) => {
       setHasSupplierPoSignature(signed);
       const signerName =
-        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+        quote.supplier.companyName ??
+        '';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -360,7 +412,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     (signed: boolean, imageDataUrl?: string) => {
       setHasDraftSupplierSignature(signed);
       const signerName =
-        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+        quote.supplier.companyName ??
+        '';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -396,7 +450,31 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     setBusy(true);
     try {
       const { tradeId } = await startTrade(quote, signatureImage);
-      persist(enrichIssuedQuote({ ...quote, tradeId }));
+      // PI 발행 성공 → 백엔드 detail이 source of truth. trade-{tradeId} id로 단일화.
+      const detail = await fetchTradeDetail(tradeId);
+      const perspectiveRole = viewerRole === 'SUPPLIER' ? 'SELLER' : 'BUYER';
+      const mapped = mapTradeDetailToQuote(detail, { perspectiveRole });
+      // viewer-side에서만 보유한 필드(배송 주소/결제 메서드 메모 등) 보존
+      const merged: QuoteDocument = {
+        ...quote,
+        ...mapped,
+        id: mapped.id,
+        viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
+        shippingAddress: mapped.shippingAddress ?? quote.shippingAddress,
+        transactionTerms: mapped.transactionTerms ?? quote.transactionTerms,
+      };
+      await syncQuoteViaApi(merged);
+      setQuote(merged);
+      saveQuote(merged);
+      const now = new Date();
+      setLastSavedAt(now);
+      setLastSavedLabel(formatSavedLabel(now));
+      // URL을 trade-{tradeId}로 마이그레이션 — 새로고침 시 동일 entry 도달
+      if (merged.id !== quote.id) {
+        router.replace(`/documents/quotes/${merged.id}`);
+      } else {
+        router.refresh();
+      }
     } catch (error: unknown) {
       alert(getStartTradeErrorMessage(error));
     } finally {
@@ -431,8 +509,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     try {
       await issuePurchaseOrder(tradeId, quote, signatureImage);
       const detail = await fetchTradeDetail(tradeId);
+      const perspectiveRole = viewerRole === 'SUPPLIER' ? 'SELLER' : 'BUYER';
       const nextQuote = {
-        ...mapTradeDetailToQuote(detail),
+        ...mapTradeDetailToQuote(detail, { perspectiveRole }),
         viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
       };
       await syncQuoteViaApi(nextQuote);
@@ -467,8 +546,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     try {
       await signPurchaseOrder(tradeId, quote, signatureImage);
       const detail = await fetchTradeDetail(tradeId);
+      const perspectiveRole = viewerRole === 'SUPPLIER' ? 'SELLER' : 'BUYER';
       const nextQuote = {
-        ...mapTradeDetailToQuote(detail),
+        ...mapTradeDetailToQuote(detail, { perspectiveRole }),
         viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
       };
       await syncQuoteViaApi(nextQuote);
@@ -538,8 +618,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
     try {
       await startPurchaseOrder(tradeId);
       const detail = await fetchTradeDetail(tradeId);
+      const perspectiveRole = viewerRole === 'SUPPLIER' ? 'SELLER' : 'BUYER';
       const nextQuote = {
-        ...mapTradeDetailToQuote(detail),
+        ...mapTradeDetailToQuote(detail, { perspectiveRole }),
         viewerRoleHint: quote.viewerRoleHint ?? viewerRole,
       };
       await syncQuoteViaApi(nextQuote);
@@ -666,7 +747,7 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
       busy={busy}
       canConfirm={hasClientInvoiceSignature}
       onConfirmReceipt={() => void handleConfirmFinalInvoice()}
-      onReportIssue={() => alert('문제 신고 접수는 준비 중입니다.')}
+      onReportIssue={() => void handleReportIssue()}
       onDownloadPdf={() => alert('PDF 다운로드는 준비 중입니다.')}
       onContactSupplier={() => alert(`${quote.supplier.companyName} 담당자에게 연결됩니다.`)}
     />
@@ -713,7 +794,9 @@ export function QuoteDetailContainer({ quote: initialQuote, viewerRole }: Props)
         onInvoiceSignatureChange={
           isInvoiceIssuedClient ? handleClientInvoiceSignature : undefined
         }
-        onDeliveryDateChange={isPoDraftClient ? handleDeliveryDateChange : undefined}
+        onDeliveryDateChange={
+          isPoDraftClient || isPoIssuedSupplier ? handleDeliveryDateChange : undefined
+        }
         onShippingAddressChange={isPoDraftClient ? handleShippingAddressChange : undefined}
       />
     </DocumentShell>

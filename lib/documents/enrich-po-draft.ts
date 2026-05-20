@@ -1,3 +1,4 @@
+import { buildPaymentMethodLabel, resolveDownPaymentPercent } from '@/lib/documents/payment-terms';
 import type { QuoteDocument } from '@/types/documents/document';
 
 function buildPoDocumentNo(issuedAt: string) {
@@ -9,6 +10,7 @@ function buildPoDocumentNo(issuedAt: string) {
 export function enrichPoDraft(quote: QuoteDocument): QuoteDocument {
   const poIssuedAt = quote.poIssuedAt ?? new Date().toISOString().slice(0, 10);
   const piDocumentNo = quote.piDocumentNo ?? quote.documentNo;
+  const downPaymentPercent = resolveDownPaymentPercent(quote);
 
   return {
     ...quote,
@@ -17,7 +19,7 @@ export function enrichPoDraft(quote: QuoteDocument): QuoteDocument {
     poDocumentNo: quote.poDocumentNo ?? buildPoDocumentNo(poIssuedAt),
     poIssuedAt,
     transactionTerms: quote.transactionTerms ?? {
-      paymentMethod: '안전결제 (선금 30% PO 합의 시 / 잔금 70% 납품 확인 시)',
+      paymentMethod: buildPaymentMethodLabel(downPaymentPercent),
       deliverySchedule: '발주처 납품일 확정 후 자동 반영',
     },
   };

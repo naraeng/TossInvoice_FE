@@ -8,7 +8,14 @@ type DashboardHeaderProps = {
   inProgressCount?: number;
   pendingCount?: number;
   pendingPaymentAmount?: number;
-  monthlyNetAmount?: number;
+  depositCount?: number;
+  balanceCount?: number;
+  /** 이번 달 발주(buy) 합계 */
+  thisMonthBuyAmount?: number;
+  /** 전월 대비 증감율(%) — 0 이상 절댓값 */
+  thisMonthBuyDelta?: number;
+  /** 'UP' | 'DOWN' | 'FLAT' — 백엔드 direction enum */
+  thisMonthBuyDirection?: string;
 };
 
 function formatWon(amount: number): string {
@@ -16,10 +23,9 @@ function formatWon(amount: number): string {
   return `${amount.toLocaleString('ko-KR')}원`;
 }
 
-function formatNetWon(amount: number): string {
+function formatBuyAmount(amount: number): string {
   if (amount === 0) return '-';
-  const sign = amount > 0 ? '+' : '';
-  return `${sign}${amount.toLocaleString('ko-KR')}원`;
+  return `${amount.toLocaleString('ko-KR')}원`;
 }
 
 export default function DashboardHeader({
@@ -28,13 +34,39 @@ export default function DashboardHeader({
   inProgressCount = 0,
   pendingCount = 0,
   pendingPaymentAmount = 0,
-  monthlyNetAmount = 0,
+  depositCount = 0,
+  balanceCount = 0,
+  thisMonthBuyAmount = 0,
+  thisMonthBuyDelta = 0,
+  thisMonthBuyDirection = 'FLAT',
 }: DashboardHeaderProps) {
   const greeting = companyName
     ? ceoName
       ? `안녕하세요, ${companyName} ${ceoName}님`
       : `안녕하세요, ${companyName}`
     : '안녕하세요';
+
+  const paymentSubLabel = (() => {
+    const parts: string[] = [];
+    if (depositCount > 0) parts.push(`선금 ${depositCount}건`);
+    if (balanceCount > 0) parts.push(`잔금 ${balanceCount}건`);
+    if (parts.length === 0) return '대기 없음';
+    return parts.join(' / ');
+  })();
+
+  const buyChange = (() => {
+    if (thisMonthBuyAmount === 0) return '-';
+    if (thisMonthBuyDirection === 'UP') return `▲ ${thisMonthBuyDelta}%`;
+    if (thisMonthBuyDirection === 'DOWN') return `▼ ${thisMonthBuyDelta}%`;
+    return '전월과 동일';
+  })();
+
+  const buyAccent =
+    thisMonthBuyDirection === 'UP'
+      ? 'text-red-500'
+      : thisMonthBuyDirection === 'DOWN'
+        ? 'text-emerald-600'
+        : 'text-slate-400';
 
   const todaySummary = [
     {
@@ -50,16 +82,16 @@ export default function DashboardHeader({
       accent: pendingCount > 0 ? 'text-amber-500' : 'text-slate-400',
     },
     {
-      label: '입금 예정',
+      label: '결제 대기',
       value: formatWon(pendingPaymentAmount),
-      change: '이번 주',
+      change: paymentSubLabel,
       accent: 'text-slate-500',
     },
     {
-      label: '이번 달 순손익',
-      value: formatNetWon(monthlyNetAmount),
-      change: monthlyNetAmount > 0 ? '수주 - 발주' : monthlyNetAmount < 0 ? '발주 초과' : '-',
-      accent: monthlyNetAmount > 0 ? 'text-emerald-600' : monthlyNetAmount < 0 ? 'text-red-500' : 'text-slate-400',
+      label: '이번 달 발주액',
+      value: formatBuyAmount(thisMonthBuyAmount),
+      change: buyChange,
+      accent: buyAccent,
     },
   ];
 

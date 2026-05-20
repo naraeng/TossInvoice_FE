@@ -87,7 +87,9 @@ export function InvoiceDetailContainer({ quote: initialQuote }: Props) {
     (signed: boolean, imageDataUrl?: string) => {
       setHasInvoiceSignature(signed);
       const signerName =
-        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+        quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+        quote.supplier.companyName ??
+        '';
 
       if (!signed || !imageDataUrl) {
         persist({
@@ -134,7 +136,8 @@ export function InvoiceDetailContainer({ quote: initialQuote }: Props) {
       const tracking = trackingNumber.trim() || undefined;
       const nextQuote = mergeDraftInvoiceSignature(
         {
-          ...mapTradeDetailToQuote(detail),
+          // 인보이스 발행은 수주처(SELLER) 전용
+          ...mapTradeDetailToQuote(detail, { perspectiveRole: 'SELLER' }),
           viewerRoleHint: 'SUPPLIER' as const,
           trackingNumber: tracking,
         },

@@ -31,7 +31,7 @@ export function SupplierInvoiceDraftSidebar({
   onDownloadPdf,
   onContactClient,
 }: Props) {
-  const { downPaymentLabel } = calcPoPaymentAmounts(quote.totals);
+  const { downPaymentLabel } = calcPoPaymentAmounts(quote);
   const issuedLabel = quote.invoiceIssuedAt
     ? new Date(quote.invoiceIssuedAt).toLocaleString('ko-KR', {
         month: 'numeric',

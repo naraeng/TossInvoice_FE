@@ -3,7 +3,6 @@
 import { Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { QuoteProtectionStatus } from '@/features/documents/quote/shared/QuoteProtectionStatus';
 import { QuoteTransactionStepper } from '@/features/documents/quote/shared/QuoteTransactionStepper';
 import { cn } from '@/lib/utils';
 import type { QuoteDocument } from '@/types/documents/document';
@@ -67,9 +66,6 @@ export function ClientQuoteIssuedSidebar({ quote, busy, onStartPo, onReject }: P
           </Button>
         </div>
 
-        <SidebarDivider className="my-6" />
-
-        <QuoteProtectionStatus />
       </div>
     </aside>
   );

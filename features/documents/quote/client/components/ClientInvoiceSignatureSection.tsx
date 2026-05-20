@@ -35,8 +35,11 @@ export function ClientInvoiceSignatureSection({
 }: Props) {
   const supplierSig = getInvoiceSupplierSignature(quote);
   const clientSig = getInvoiceClientSignature(quote);
-  const { balanceLabel } = calcPoPaymentAmounts(quote.totals);
-  const supplierRep = quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ?? '박장규';
+  const { balanceLabel } = calcPoPaymentAmounts(quote);
+  const supplierRep =
+    quote.supplierProfile?.representative.replace(/\s*대표\s*$/, '') ??
+    quote.supplier.companyName ??
+    '';
   return (
     <section className="mx-8 border-t border-slate-300/80 py-6">
       <p className="text-sm font-bold text-[#191919]">서명</p>

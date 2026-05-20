@@ -38,6 +38,10 @@ export interface Notice {
   unread: boolean;
   senderCompanyName: string | null;
   tradeTotalAmount: number | null;
+  /** 알림 클릭 시 라우팅 대상 — 없으면 클릭 불가 알림(예: PARTNER_ACCOUNT_CHANGED) */
+  tradeId: number | null;
+  /** 라우팅 분기를 위해 원본 notificationType도 그대로 노출 */
+  type: NotificationType;
 }
 
 const ICON_MAP: Record<NotificationType, NoticeIcon> = {
@@ -88,5 +92,32 @@ export function apiRowToNotice(row: NotificationApiRow): Notice {
     unread: false,
     senderCompanyName: row.senderCompanyName ?? null,
     tradeTotalAmount: row.tradeTotalAmount ?? null,
+    tradeId: row.tradeId ?? null,
+    type: row.notificationType,
   };
+}
+
+/**
+ * 알림 카드 클릭 시 이동할 경로.
+ *
+ * - tradeId가 있고 거래 흐름 관련 알림이면 견적/거래 상세 페이지로 이동.
+ * - 거래 페이지(`/documents/quotes/trade-{tradeId}`) 한 곳으로 단순화 — 상세 안에서
+ *   상태에 따라 quote/PO/invoice 뷰가 분기되므로 type별로 다른 라우트로 보낼 필요 없음.
+ * - PARTNER_ACCOUNT_CHANGED 처럼 tradeId가 없는 알림은 null 을 반환해 클릭 무동작.
+ */
+export function noticeHref(notice: Pick<Notice, 'tradeId' | 'type'>): string | null {
+  if (notice.tradeId == null) return null;
+  switch (notice.type) {
+    case 'PI_RECEIVED':
+    case 'PO_STARTED':
+    case 'PO_RECEIVED':
+    case 'PO_SIGNED':
+    case 'INVOICE_RECEIVED':
+    case 'TRADE_COMPLETED':
+    case 'TRADE_CANCELLED':
+    case 'REPORTED':
+      return `/documents/quotes/trade-${notice.tradeId}`;
+    default:
+      return null;
+  }
 }

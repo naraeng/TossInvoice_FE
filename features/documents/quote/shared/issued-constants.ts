@@ -23,9 +23,3 @@ export const TRANSACTION_STEPS = [
     clientSub: '납품 완료 후 발행',
   },
 ] as const;
-
-export const PROTECTION_STATUS_ITEMS = [
-  '거래 토큰 활성화',
-  '발주처 계좌 검증 완료',
-  '납품 확인 시 잔금 자동 송금',
-] as const;
