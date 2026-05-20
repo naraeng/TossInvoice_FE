@@ -5,9 +5,20 @@ import {
   isRememberLoginEnabled,
   storeAuthTokens,
 } from '@/lib/auth-storage';
-import { resolveApiBaseUrl } from '@/lib/resolve-api-base-url';
+
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || '';
+
+if (!process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NODE_ENV !== 'production') {
+  // Use same-origin calls in dev to avoid CORS, then proxy via next.config.ts rewrites.
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[apiClient] NEXT_PUBLIC_API_BASE_URL is not set. Using same-origin API path (/api/v1) in development.',
+  );
+}
 
 export const apiClient = axios.create({
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,10 +30,9 @@ let refreshPromise: Promise<string | null> | null = null;
 async function reissueAccessToken(): Promise<string | null> {
   try {
     const res = await axios.post(
-      '/api/v1/auth/reissue',
+      `${apiBaseUrl}/api/v1/auth/reissue`,
       {},
       {
-        baseURL: resolveApiBaseUrl(),
         headers: { 'Content-Type': 'application/json' },
         withCredentials: true,
       },
@@ -64,8 +74,6 @@ function deleteContentTypeHeader(headers: unknown) {
 }
 
 apiClient.interceptors.request.use((config) => {
-  config.baseURL = resolveApiBaseUrl();
-
   const method = config.method?.toLowerCase();
 
   // GET에 application/json이 붙으면 Spring이 400을 반환하는 경우가 있음
